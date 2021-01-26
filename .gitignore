@@ -1,0 +1,7 @@
+/target
+proptest-regressions/*
+*.swp
+
+# Hide environment secrets
+.env*
+**/.env*
