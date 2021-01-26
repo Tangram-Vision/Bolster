@@ -50,6 +50,7 @@ impl Default for Configuration {
 }
 
 // Error type handling from OpenAPI generated code
+// TODO: move these to utils/src/errors.rs ?
 use serde_json;
 use std::error;
 use std::fmt;
