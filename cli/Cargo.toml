@@ -1,9 +1,10 @@
 [package]
 name = "cli"
-version = "1.0.0"
-authors = ["Abid Omar <contact@omarabid.com>"]
-description = "CLI interface"
+version = "0.1.0"
+authors = ["Greg Schafer <greg.schafer@tangramvision.com>"]
 edition = "2018"
+publish = false
+description = "CLI interface"
 
 [dependencies]
 utils = { path = "../utils" }

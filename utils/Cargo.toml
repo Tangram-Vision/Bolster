@@ -1,9 +1,10 @@
 [package]
 name = "utils"
-version = "1.0.0"
-authors = ["Abid Omar <contact@omarabid.com>"]
-description = "Various utilities and functionalities"
+version = "0.1.0"
+authors = ["Greg Schafer <greg.schafer@tangramvision.com>"]
 edition = "2018"
+publish = false
+description = "Various utilities and functionalities"
 
 [dependencies]
 failure = "0.1.5"
