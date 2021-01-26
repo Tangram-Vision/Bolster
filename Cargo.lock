@@ -201,7 +201,7 @@ dependencies = [
 
 [[package]]
 name = "cli"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -261,7 +261,7 @@ checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
 
 [[package]]
 name = "core"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "log 0.4.13",
@@ -1063,7 +1063,7 @@ dependencies = [
 
 [[package]]
 name = "utils"
-version = "1.0.0"
+version = "0.1.0"
 dependencies = [
  "clap",
  "config",
