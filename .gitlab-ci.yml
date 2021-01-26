@@ -1,0 +1,82 @@
+image: 'rust:latest'
+
+stages:
+  - test
+  - build_artifacts
+
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/cargo
+
+
+# For advice on caching packages, see:
+# https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
+.paths: &cache_paths
+  - cargo/bin/
+  - cargo/registry/index/
+  - cargo/registry/cache/
+  - cargo/git/db/
+  - target/
+
+
+test:
+  stage: test
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo test --verbose
+
+lint:
+  stage: test
+  before_script:
+    - rustup component add clippy
+  script:
+    - rustc --version
+    - cargo --version
+    - cargo clippy --all-targets --all-features -- -D warnings
+
+pages:
+  stage: build_artifacts
+  # Run this at the same time as test and lint jobs
+  # https://docs.gitlab.com/ee/ci/yaml/#needs
+  needs: []
+  script:
+    - cargo doc --no-deps --document-private-items
+    - mkdir public
+    - cp -r target/doc/* public
+    - LOWERCASE_PROJECT_NAME=$(echo $CI_PROJECT_NAME | awk '{print tolower($0)}') && echo "<meta http-equiv=refresh content=0;url=$LOWERCASE_PROJECT_NAME>" > public/index.html
+  artifacts:
+    paths:
+      - public
+  only:
+    - main
+
+build_cache:
+  stage: build_artifacts
+  script:
+    - rustc --version
+    - cargo --version
+    - rustup component add clippy
+    # Build dev-dependencies too
+    - cargo test --no-run
+    # du commands are for keeping an eye on cache size
+    # We can remove them if we're confident the cache size is sane.
+    - du -h -d3 cargo || true
+    - du -h -d2 target || true
+
+    # cargo check/clippy does weird caching things, so don't try to cache it
+    # https://github.com/rust-lang/rust-clippy/issues/4612
+    # - cargo clippy --all-targets --all-features -- -D warnings
+  cache:
+    # Push all cargo dependencies and compilation artifacts.
+    policy: push
+    paths: *cache_paths
+  only:
+    - main
+
+
+cache:
+  # Only pull the cache, don't push because it takes a while.
+  # The build_cache job populates the cache.
+  policy: pull
+
+  paths: *cache_paths
