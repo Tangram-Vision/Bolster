@@ -1,5 +1,5 @@
+use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
-use clap::{crate_version, crate_description, crate_authors};
 
 use core::commands;
 use utils::app_config::AppConfig;
@@ -50,7 +50,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .takes_value(true),
         )
         .subcommand(App::new("hazard").about("Generate a hazardous occurance"))
-
         .subcommand(App::new("error").about("Simulate an error"))
         .subcommand(App::new("config").about("Show Configuration"));
 

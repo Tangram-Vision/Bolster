@@ -120,6 +120,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "bolster"
+version = "0.1.0"
+dependencies = [
+ "assert_cmd",
+ "better-panic",
+ "cli",
+ "core",
+ "human-panic",
+ "log 0.4.13",
+ "predicates",
+ "slog-scope",
+ "slog-stdlog",
+ "utils",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.66"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -757,22 +773,6 @@ name = "rust-ini"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e52c148ef37f8c375d49d5a73aa70713125b7f19095948a923f80afdeb22ec2"
-
-[[package]]
-name = "rust-starter"
-version = "1.0.0"
-dependencies = [
- "assert_cmd",
- "better-panic",
- "cli",
- "core",
- "human-panic",
- "log 0.4.13",
- "predicates",
- "slog-scope",
- "slog-stdlog",
- "utils",
-]
 
 [[package]]
 name = "rustc-demangle"
