@@ -14,6 +14,11 @@ search/sort/filter.
 This tool is currently WIP. For design documentation, see
 https://www.notion.so/tangramvision/TANG-upload-download-search-2bd13054bc474bc7a669af90e92584ba?d=9bb9b14b-3813-498b-8247-372d6ad03cba#c6f91c59096f40aab3159b503ba9c595
 
+The foundation for this tool is from
+https://github.com/rust-starter/rust-starter
+
+TODO: mention api codegen?
+
 # Usage
 
 TODO
