@@ -21,7 +21,7 @@ pub fn default_root_logger() -> Result<slog::Logger> {
     let drain = slog::Duplicate(syslog_drain, term_drain).fuse();
 
     // Create Logger
-    let logger = slog::Logger::root(drain, o!("who" => "rust-starter"));
+    let logger = slog::Logger::root(drain, o!("who" => "bolster"));
 
     // Return Logger
     Ok(logger)

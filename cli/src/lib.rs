@@ -36,7 +36,7 @@ pub fn cli_match() -> Result<()> {
 /// Configure Clap
 /// This function will configure clap and match arguments
 pub fn cli_config() -> Result<clap::ArgMatches> {
-    let cli_app = App::new("rust-starter")
+    let cli_app = App::new("bolster")
         .setting(AppSettings::ArgRequiredElseHelp)
         .version(crate_version!())
         .about(crate_description!())
