@@ -1,6 +1,6 @@
+use slog::o;
 use slog::Drain;
 use slog_syslog::Facility;
-use slog::o;
 
 use super::error::Result;
 
