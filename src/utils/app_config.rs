@@ -19,23 +19,41 @@ lazy_static! {
 
 #[derive(Debug, Deserialize)]
 pub struct Database {
-    pub url: String,
+    pub jwt: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct DigitalOceanSpaces {
+    pub api_key: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct AwsS3 {
+    pub access_key: String,
+    pub secret_key: String,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
     pub debug: bool,
-    pub database: Database,
+    pub database: Option<Database>,
+    pub digitalocean_spaces: Option<DigitalOceanSpaces>,
+    pub aws_s3: Option<AwsS3>,
 }
 
 impl AppConfig {
-    pub fn init(default_config: Option<&str>) -> Result<()> {
+    pub fn init(user_config: Option<&str>) -> Result<()> {
         let mut settings = Config::new();
 
-        // Embed file into executable
-        // This macro will embed the configuration file into the
-        // executable. Check include_str! for more info.
-        if let Some(config_contents) = default_config {
+        // Always start with default config
+        let default_config = include_str!("../resources/default_config.toml");
+        settings.merge(config::File::from_str(
+            &default_config,
+            config::FileFormat::Toml,
+        ))?;
+
+        // Merge user-supplied config file
+        if let Some(config_contents) = user_config {
             //let contents = include_str!(config_file_path);
             settings.merge(config::File::from_str(
                 &config_contents,
@@ -44,7 +62,8 @@ impl AppConfig {
         }
 
         // Merge settings with env variables
-        settings.merge(Environment::with_prefix("BOLSTER"))?;
+        // Separator allows reaching into structs (e.g. AWS_S3_ACCESS_KEY=blah)
+        settings.merge(Environment::with_prefix("BOLSTER").separator("__"))?;
 
         // TODO: Merge settings with Clap Settings Arguments
 
@@ -69,7 +88,6 @@ impl AppConfig {
         Ok(())
     }
 
-    /*
     // Set CONFIG
     pub fn set(key: &str, value: &str) -> Result<()> {
         {
@@ -87,7 +105,6 @@ impl AppConfig {
     {
         Ok(CONFIG.read()?.get::<T>(key)?)
     }
-    */
 
     // Get CONFIG
     // This clones Config (from RwLock<Config>) into a new AppConfig object.
@@ -101,5 +118,94 @@ impl AppConfig {
 
         // Coerce Config into AppConfig
         Ok(config_clone.try_into()?)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppConfig;
+    use std::env;
+
+    #[test]
+    fn fetch_full_config() {
+        // Initialize configuration
+        let config_contents = include_str!("../resources/test_full_config.toml");
+        println!("full {}", config_contents);
+        AppConfig::init(Some(config_contents)).unwrap();
+
+        // Fetch an instance of Config
+        let config = AppConfig::fetch().unwrap();
+
+        // Check the values
+        assert_eq!(config.debug, false);
+        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
+        assert_eq!(config.digitalocean_spaces.as_ref().unwrap().api_key, "abc");
+        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
+        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
+    }
+
+    #[test]
+    fn fetch_partial_config() {
+        // Initialize configuration
+        let config_contents = include_str!("../resources/test_partial_config.toml");
+        println!("partial {}", config_contents);
+        AppConfig::init(Some(config_contents)).unwrap();
+
+        // Fetch an instance of Config
+        let config = AppConfig::fetch().unwrap();
+
+        // Check the values
+        assert_eq!(config.debug, false);
+        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
+        assert!(config.digitalocean_spaces.as_ref().is_none());
+        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
+        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
+    }
+
+    #[test]
+    fn env_var_override() {
+        // Initialize configuration
+        let config_contents = include_str!("../resources/test_partial_config.toml");
+        println!("env_var_override {}", config_contents);
+        env::set_var("BOLSTER_DEBUG", true.to_string());
+        env::set_var("BOLSTER_AWS_S3__SECRET_KEY", "so secret");
+        AppConfig::init(Some(config_contents)).unwrap();
+
+        // Fetch an instance of Config
+        let config = AppConfig::fetch().unwrap();
+
+        // Check the values
+        assert_eq!(config.debug, true);
+        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
+        assert!(config.digitalocean_spaces.as_ref().is_none());
+        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
+        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "so secret");
+    }
+
+    #[test]
+    fn verify_get() {
+        // Initialize configuration
+        let config_contents = include_str!("../resources/test_full_config.toml");
+        AppConfig::init(Some(config_contents)).as_ref().unwrap();
+
+        // Check value with get
+        assert_eq!(AppConfig::get::<bool>("debug").unwrap(), false);
+        assert_eq!(AppConfig::get::<String>("database.jwt").unwrap(), "abc");
+    }
+
+    #[test]
+    fn verify_set() {
+        // Initialize configuration
+        let config_contents = include_str!("../resources/test_full_config.toml");
+        AppConfig::init(Some(config_contents)).unwrap();
+
+        // Set a field
+        AppConfig::set("database.jwt", "new jwt").unwrap();
+
+        // Fetch a new instance of Config
+        let config = AppConfig::fetch().unwrap();
+
+        // Check value was modified
+        assert_eq!(config.database.as_ref().unwrap().jwt, "new jwt");
     }
 }

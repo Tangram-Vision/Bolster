@@ -1,0 +1,11 @@
+debug = false
+
+[database]
+jwt = "abc"
+
+[digitalocean_spaces]
+api_key = "abc"
+
+[aws_s3]
+access_key = "abc"
+secret_key = "def"
