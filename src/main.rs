@@ -42,6 +42,7 @@ fn main() -> Result<()> {
     let _log_guard = slog_stdlog::init()?;
 
     // Initialize Configuration
+    // TODO: pull config from next to binary or from ~/.config/tangram_bolster.toml or only from cmdline arg or something
     let config_contents = include_str!("resources/default_config.toml");
     AppConfig::init(Some(config_contents))?;
 
