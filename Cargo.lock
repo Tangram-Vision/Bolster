@@ -125,14 +125,24 @@ version = "0.1.0"
 dependencies = [
  "assert_cmd",
  "better-panic",
- "cli",
- "core",
+ "clap",
+ "config",
+ "failure",
  "human-panic",
+ "lazy_static",
  "log 0.4.13",
  "predicates",
+ "rand",
+ "reqwest",
+ "serde 1.0.123",
+ "serde_json",
+ "slog",
+ "slog-async",
  "slog-scope",
  "slog-stdlog",
- "utils",
+ "slog-syslog",
+ "slog-term",
+ "url 1.7.2",
 ]
 
 [[package]]
@@ -218,17 +228,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cli"
-version = "0.1.0"
-dependencies = [
- "assert_cmd",
- "clap",
- "core",
- "predicates",
- "utils",
-]
-
-[[package]]
 name = "clicolors-control"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -276,20 +275,6 @@ name = "constant_time_eq"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "245097e9a4535ee1e3e3931fcfcd55a796a44c643e8596ff6566d68f09b87bbc"
-
-[[package]]
-name = "core"
-version = "0.1.0"
-dependencies = [
- "clap",
- "log 0.4.13",
- "rand",
- "reqwest",
- "serde 1.0.123",
- "serde_json",
- "url 1.7.2",
- "utils",
-]
 
 [[package]]
 name = "crossbeam-channel"
@@ -1629,24 +1614,6 @@ dependencies = [
  "idna 0.2.0",
  "matches",
  "percent-encoding 2.1.0",
-]
-
-[[package]]
-name = "utils"
-version = "0.1.0"
-dependencies = [
- "clap",
- "config",
- "failure",
- "lazy_static",
- "log 0.4.13",
- "serde 1.0.123",
- "slog",
- "slog-async",
- "slog-scope",
- "slog-stdlog",
- "slog-syslog",
- "slog-term",
 ]
 
 [[package]]

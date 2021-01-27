@@ -3,13 +3,9 @@
 // Proprietary and confidential
 // ----------------------------
 
-use std::fs::File;
-use utils::error::Result;
+use crate::utils::error::Result;
 
 /// Return, randomly, true or false
-pub fn simulate_error() -> Result<()> {
-    // Trigger an error
-    File::open("thisfiledoesnotexist")?;
-
-    Ok(())
+pub fn generate_hazard() -> Result<bool> {
+    Ok(rand::random())
 }

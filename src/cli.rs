@@ -6,9 +6,9 @@
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
 
-use core::commands;
-use utils::app_config::AppConfig;
-use utils::error::Result;
+use crate::core::commands;
+use crate::utils::app_config::AppConfig;
+use crate::utils::error::Result;
 
 /// Match commands
 pub fn cli_match() -> Result<()> {

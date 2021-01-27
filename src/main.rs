@@ -9,6 +9,10 @@ use human_panic::setup_panic;
 #[cfg(debug_assertions)]
 extern crate better_panic;
 
+mod cli;
+mod core;
+mod utils;
+
 use utils::app_config::AppConfig;
 use utils::error::Result;
 

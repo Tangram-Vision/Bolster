@@ -6,8 +6,9 @@
 use super::error;
 use super::hazard;
 
-use utils::app_config::AppConfig;
-use utils::error::Result;
+use crate::utils::app_config::AppConfig;
+use crate::utils::error::Result;
+use log::info;
 
 /// Show the configuration file
 pub fn hazard() -> Result<()> {
