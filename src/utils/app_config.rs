@@ -69,6 +69,7 @@ impl AppConfig {
         Ok(())
     }
 
+    /*
     // Set CONFIG
     pub fn set(key: &str, value: &str) -> Result<()> {
         {
@@ -86,6 +87,7 @@ impl AppConfig {
     {
         Ok(CONFIG.read()?.get::<T>(key)?)
     }
+    */
 
     // Get CONFIG
     // This clones Config (from RwLock<Config>) into a new AppConfig object.
