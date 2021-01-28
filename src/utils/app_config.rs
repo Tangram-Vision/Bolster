@@ -3,13 +3,12 @@
 // Proprietary and confidential
 // ----------------------------
 
+use anyhow::Result;
 use config::{Config, Environment};
 use lazy_static::lazy_static;
 use serde::Deserialize;
 use std::ops::Deref;
 use std::sync::RwLock;
-
-use super::error::Result;
 
 // CONFIG static variable. It's actually an AppConfig
 // inside an RwLock.

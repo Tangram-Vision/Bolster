@@ -11,9 +11,9 @@ CLI tool for managing Tangram datasets, including upload/download and search/sor
 """
 
 [dependencies]
+anyhow = "1.0"
 better-panic = "0.2"
 config = "0.10"
-failure = "0.1"
 human-panic = "1.0"
 lazy_static = "1.4"
 log = "0.4"

@@ -3,7 +3,7 @@
 // Proprietary and confidential
 // ----------------------------
 
-use crate::utils::error::Result;
+use anyhow::Result;
 use std::fs::File;
 
 /// Return, randomly, true or false

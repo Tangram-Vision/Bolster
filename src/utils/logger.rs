@@ -3,11 +3,10 @@
 // Proprietary and confidential
 // ----------------------------
 
+use anyhow::Result;
 use slog::o;
 use slog::Drain;
 use slog_syslog::Facility;
-
-use super::error::Result;
 
 pub fn default_root_logger() -> Result<slog::Logger> {
     // Create drains

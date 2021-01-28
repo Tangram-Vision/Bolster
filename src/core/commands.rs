@@ -3,12 +3,13 @@
 // Proprietary and confidential
 // ----------------------------
 
+use anyhow::Result;
+use log::info;
+
 use super::error;
 use super::hazard;
 
 use crate::utils::app_config::AppConfig;
-use crate::utils::error::Result;
-use log::info;
 
 /// Show the configuration file
 pub fn hazard() -> Result<()> {

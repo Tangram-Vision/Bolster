@@ -13,9 +13,8 @@ mod cli;
 mod core;
 mod utils;
 
-use log::info;
+use anyhow::Result;
 use utils::app_config::AppConfig;
-use utils::error::Result;
 
 fn main() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.

@@ -3,7 +3,7 @@
 // Proprietary and confidential
 // ----------------------------
 
-use crate::utils::error::Result;
+use anyhow::Result;
 
 /// Return, randomly, true or false
 pub fn generate_hazard() -> Result<bool> {
