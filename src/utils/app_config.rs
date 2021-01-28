@@ -68,7 +68,7 @@ impl AppConfig {
 
         // Save Config to RwLoc
         {
-            let mut w = CONFIG.write()?;
+            let mut w = CONFIG.write().unwrap();
             *w = settings;
         }
 
@@ -80,7 +80,8 @@ impl AppConfig {
         if let Some(config_file_path) = config_file {
             {
                 CONFIG
-                    .write()?
+                    .write()
+                    .unwrap()
                     .merge(config::File::with_name(config_file_path))?;
             }
         }
@@ -91,7 +92,7 @@ impl AppConfig {
     pub fn set(key: &str, value: &str) -> Result<()> {
         {
             // Set Property
-            CONFIG.write()?.set(key, value)?;
+            CONFIG.write().unwrap().set(key, value)?;
         }
 
         Ok(())
@@ -102,7 +103,7 @@ impl AppConfig {
     where
         T: serde::Deserialize<'de>,
     {
-        Ok(CONFIG.read()?.get::<T>(key)?)
+        Ok(CONFIG.read().unwrap().get::<T>(key)?)
     }
 
     // Get CONFIG
@@ -110,7 +111,7 @@ impl AppConfig {
     // This means you have to fetch this again if you changed the configuration.
     pub fn fetch() -> Result<AppConfig> {
         // Get a Read Lock from RwLock
-        let r = CONFIG.read()?;
+        let r = CONFIG.read().unwrap();
 
         // Clone the Config object
         let config_clone = r.deref().clone();
