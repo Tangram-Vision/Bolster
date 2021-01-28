@@ -13,6 +13,7 @@ mod cli;
 mod core;
 mod utils;
 
+use log::info;
 use utils::app_config::AppConfig;
 use utils::error::Result;
 
@@ -34,7 +35,10 @@ fn main() -> Result<()> {
     }
 
     // Setup Logging
-    utils::logger::setup_logging()?;
+    // Don't move this to logger.rs, because then the logger and guard will go
+    // out of scope and be destructed/dropped!
+    let _guard = slog_scope::set_global_logger(utils::logger::default_root_logger()?);
+    let _log_guard = slog_stdlog::init()?;
 
     // Initialize Configuration
     // TODO: pull config from next to binary or from ~/.config/tangram_bolster.toml or only from cmdline arg or something
