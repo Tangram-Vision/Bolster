@@ -44,14 +44,7 @@ impl AppConfig {
     pub fn init(user_config: Option<&str>) -> Result<()> {
         let mut settings = Config::new();
 
-        // Always start with default config
-        let default_config = include_str!("../resources/default_config.toml");
-        settings.merge(config::File::from_str(
-            &default_config,
-            config::FileFormat::Toml,
-        ))?;
-
-        // Merge user-supplied config file
+        // Merge config file (default config in regular operation)
         if let Some(config_contents) = user_config {
             //let contents = include_str!(config_file_path);
             settings.merge(config::File::from_str(
@@ -61,7 +54,7 @@ impl AppConfig {
         }
 
         // Merge settings with env variables
-        // Separator allows reaching into structs (e.g. AWS_S3_ACCESS_KEY=blah)
+        // Separator allows reaching into structs (e.g. AWS_S3__ACCESS_KEY=foo)
         settings.merge(Environment::with_prefix("BOLSTER").separator("__"))?;
 
         // TODO: Merge settings with Clap Settings Arguments
