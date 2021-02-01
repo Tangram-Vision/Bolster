@@ -9,12 +9,12 @@ use human_panic::setup_panic;
 #[cfg(debug_assertions)]
 extern crate better_panic;
 
+mod app_config;
 mod cli;
 mod core;
-mod utils;
 
 use anyhow::Result;
-use utils::app_config::AppConfig;
+use app_config::AppConfig;
 
 fn main() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.

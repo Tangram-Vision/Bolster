@@ -12,7 +12,7 @@ use super::hazard;
 use super::models;
 
 use super::api;
-use crate::utils::app_config::AppConfig;
+use crate::app_config::AppConfig;
 
 pub fn create_dataset() -> Result<()> {
     // TODO: at first, just create dataset
@@ -92,7 +92,7 @@ pub fn simulate_error() -> Result<()> {
 #[cfg(test)]
 mod test {
     use super::create_dataset;
-    use crate::utils::app_config::AppConfig;
+    use crate::app_config::AppConfig;
 
     #[test]
     fn test_missing_database_jwt() {

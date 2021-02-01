@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn fetch_full_config() {
         // Initialize configuration
-        let config_contents = include_str!("../resources/test_full_config.toml");
+        let config_contents = include_str!("resources/test_full_config.toml");
         AppConfig::init(Some(config_contents)).unwrap();
 
         // Fetch an instance of Config
@@ -136,7 +136,7 @@ mod tests {
     #[test]
     fn fetch_partial_config() {
         // Initialize configuration
-        let config_contents = include_str!("../resources/test_partial_config.toml");
+        let config_contents = include_str!("resources/test_partial_config.toml");
         AppConfig::init(Some(config_contents)).unwrap();
 
         // Fetch an instance of Config
@@ -175,7 +175,7 @@ mod tests {
     #[test]
     fn verify_get() {
         // Initialize configuration
-        let config_contents = include_str!("../resources/test_full_config.toml");
+        let config_contents = include_str!("resources/test_full_config.toml");
         AppConfig::init(Some(config_contents)).as_ref().unwrap();
 
         // Check value with get
@@ -185,7 +185,7 @@ mod tests {
     #[test]
     fn verify_set() {
         // Initialize configuration
-        let config_contents = include_str!("../resources/test_full_config.toml");
+        let config_contents = include_str!("resources/test_full_config.toml");
         AppConfig::init(Some(config_contents)).unwrap();
 
         // Set a field
