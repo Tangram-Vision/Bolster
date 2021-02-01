@@ -1,12 +1,29 @@
-image: 'rust:latest'
+# CONFIGURATION
+# NOTE: `image` describes the docker image that we want this test suite
+#       to run on. For many repos with more specialized deps, this is a custom
+#       Tangram-hosted instance, e.g.
+#       `image: 'registry.gitlab.com/tangram-vision/docker-base'`.
+#       If this is the case, make sure to include SSH loading in
+#       `before_script`
+image: 'registry.gitlab.com/tangram-vision/docker-base:latest'
 
 stages:
   - test
+  - doc
   - build_artifacts
+
+before_script:
+  # Update rust in case the latest version isn't built into our "tang" docker
+  # image.
+  - CARGO_HOME=/usr/local/cargo rustup update
+  # Load SSH key we can use to pull internal dependencies
+  # From: https://docs.gitlab.com/ce/ci/ssh_keys/README.html
+  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
-
 
 # For advice on caching packages, see:
 # https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
@@ -17,7 +34,18 @@ variables:
   - cargo/git/db/
   - target/
 
+cache:
+  # Only pull the cache, don't push because it takes a while.
+  # The build_cache job populates the cache.
+  policy: pull
+  paths: *cache_paths
 
+
+##### ########## ########## ########## ########## #####
+# TEST STAGE
+# - [PASS REQ] runs all unit tests in the build
+# - [PASS REQ] runs a lint checker over every piece of code
+# - [PASS REQ] checks for copyright notice at the top of all source files
 test:
   stage: test
   script:
@@ -27,15 +55,31 @@ test:
 
 lint:
   stage: test
-  before_script:
-    - rustup component add clippy
   script:
     - rustc --version
     - cargo --version
     - cargo clippy --all-targets --all-features -- -D warnings
 
+security-check:
+  stage: test
+  variables:
+    # Catches and fails on non-zero status
+    FF_ENABLE_BASH_EXIT_CODE_CHECK: 1
+  script:
+    - security_check.sh $CI_PROJECT_DIR
+
+##### ########## ########## ########## ########## #####
+# DOC STAGE
+# - [PASS OPT] checks for documentation on all relevant pieces of code
+# - [PASS REQ] creates documentation pages
+doc-check:
+  stage: doc
+  script:
+    - cargo clippy --all-targets --all-features -- -A clippy::all -D clippy::missing_docs_in_private_items
+  allow_failure: true
+
 pages:
-  stage: build_artifacts
+  stage: doc
   # Run this at the same time as test and lint jobs
   # https://docs.gitlab.com/ee/ci/yaml/#needs
   needs: []
@@ -50,12 +94,18 @@ pages:
   only:
     - main
 
+##### ########## ########## ########## ########## #####
+# CACHE STAGE
+# - [PASS REQ] creates a build cache for future builds. This frees up time
+#   during build cycles, and is essential when running on DigitalOcean
+#   or another like service.
+# - [PASS REQ] update our badges on the project page by
+#   creating new SVG artifacts in the ci/ folder.
 build_cache:
   stage: build_artifacts
   script:
     - rustc --version
     - cargo --version
-    - rustup component add clippy
     # Build dev-dependencies too
     - cargo test --no-run
     # du commands are for keeping an eye on cache size
@@ -73,10 +123,17 @@ build_cache:
   only:
     - main
 
+build_badges:
+  stage: build_artifacts
+  script:
+    - rustc --version
+    - cargo --version
+    - tangram-badge-generator -d $CI_PROJECT_DIR
+  artifacts:
+    paths:
+      - ./ci/*.svg
+    when: always
+    expire_in: 4 weeks
+  only:
+    - main
 
-cache:
-  # Only pull the cache, don't push because it takes a while.
-  # The build_cache job populates the cache.
-  policy: pull
-
-  paths: *cache_paths
