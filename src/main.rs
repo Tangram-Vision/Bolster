@@ -34,10 +34,9 @@ fn main() -> Result<()> {
     }
 
     // Setup Logging
-    // Don't move this to logger.rs, because then the logger and guard will go
-    // out of scope and be destructed/dropped!
-    let _guard = slog_scope::set_global_logger(utils::logger::default_root_logger()?);
-    let _log_guard = slog_stdlog::init()?;
+    // Used to use slog but switched to env_logger for simplicity.
+    // https://gitlab.com/tangram-vision/bolster/-/merge_requests/4
+    env_logger::init();
 
     // Initialize Configuration with defaults
     let config_contents = include_str!("resources/default_config.toml");
