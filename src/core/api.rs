@@ -3,54 +3,34 @@
 // Proprietary and confidential
 // ----------------------------
 
-mod datasets;
-mod digitalocean_spaces;
+pub mod datasets;
+pub mod digitalocean_spaces;
 
 // TODO: Expose API functions we need to call from elsewhere
 // pub use datasets::{datasets_create, etc...};
 
-use reqwest;
-
 pub struct Configuration {
     pub base_path: String,
-    pub user_agent: Option<String>,
-    pub client: reqwest::Client,
-    pub basic_auth: Option<BasicAuth>,
-    pub oauth_access_token: Option<String>,
-    pub bearer_access_token: Option<String>,
-    pub api_key: Option<ApiKey>,
-    // TODO: take an oauth2 token source, similar to the go one
-}
-
-pub type BasicAuth = (String, Option<String>);
-
-pub struct ApiKey {
-    pub prefix: Option<String>,
-    pub key: String,
+    pub user_agent: String,
+    pub client: reqwest::blocking::Client,
+    pub bearer_access_token: String,
 }
 
 impl Configuration {
-    pub fn new() -> Configuration {
-        Configuration::default()
-    }
-}
-
-impl Default for Configuration {
-    fn default() -> Self {
+    pub fn new(bearer_access_token: String) -> Configuration {
+        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
         Configuration {
             base_path: "http://0.0.0.0:3000".to_owned(),
-            user_agent: Some("OpenAPI-Generator/7.0.1 (UNKNOWN)/rust".to_owned()),
-            client: reqwest::Client::new(),
-            basic_auth: None,
-            oauth_access_token: None,
-            bearer_access_token: None,
-            api_key: None,
+            client: reqwest::blocking::Client::new(),
+            user_agent,
+            bearer_access_token,
         }
     }
 }
 
 // Error type handling from OpenAPI generated code
 // TODO: move these to utils/src/errors.rs ?
+/*
 use serde_json;
 use std::error;
 use std::fmt;
@@ -114,3 +94,4 @@ impl<T> From<std::io::Error> for Error<T> {
 pub fn urlencode<T: AsRef<str>>(s: T) -> String {
     ::url::form_urlencoded::byte_serialize(s.as_ref().as_bytes()).collect()
 }
+*/

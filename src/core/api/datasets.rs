@@ -3,8 +3,10 @@
 // Proprietary and confidential
 // ----------------------------
 
-use reqwest;
+use crate::core::models::Dataset;
+use anyhow::{anyhow, Result};
 
+/*
 use super::{configuration, Error};
 use crate::apis::ResponseContent;
 
@@ -118,7 +120,7 @@ pub async fn datasets_get(
     offset: Option<&str>,
     limit: Option<&str>,
     prefer: Option<&str>,
-) -> Result<Vec<crate::models::Datasets>, Error<DatasetsGetError>> {
+) -> Result<Vec<>, Error<DatasetsGetError>> {
     let local_var_client = &configuration.client;
 
     let local_var_uri_str = format!("{}/datasets", configuration.base_path);
@@ -209,7 +211,7 @@ pub async fn datasets_patch(
     url: Option<&str>,
     metadata: Option<&str>,
     prefer: Option<&str>,
-    datasets: Option<crate::models::Datasets>,
+    dataset: Option<Dataset>,
 ) -> Result<(), Error<DatasetsPatchError>> {
     let local_var_client = &configuration.client;
 
@@ -247,7 +249,7 @@ pub async fn datasets_patch(
         local_var_req_builder =
             local_var_req_builder.header("Prefer", local_var_param_value.to_string());
     }
-    local_var_req_builder = local_var_req_builder.json(&datasets);
+    local_var_req_builder = local_var_req_builder.json(&dataset);
 
     let local_var_req = local_var_req_builder.build()?;
     let local_var_resp = local_var_client.execute(local_var_req).await?;
@@ -268,48 +270,57 @@ pub async fn datasets_patch(
         Err(Error::ResponseError(local_var_error))
     }
 }
+*/
 
-pub async fn datasets_post(
-    configuration: &configuration::Configuration,
-    select: Option<&str>,
-    prefer: Option<&str>,
-    datasets: Option<crate::models::Datasets>,
-) -> Result<(), Error<DatasetsPostError>> {
+pub fn datasets_post(
+    configuration: &crate::core::api::Configuration,
+    // Select is to pick specific fields to return in response
+    // select: Option<&str>,
+    request_body: serde_json::Value,
+) -> Result<Dataset> {
     let local_var_client = &configuration.client;
 
     let local_var_uri_str = format!("{}/datasets", configuration.base_path);
     let mut local_var_req_builder = local_var_client.post(local_var_uri_str.as_str());
 
+    /*
     if let Some(ref local_var_str) = select {
         local_var_req_builder =
             local_var_req_builder.query(&[("select", &local_var_str.to_string())]);
     }
-    if let Some(ref local_var_user_agent) = configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(local_var_param_value) = prefer {
-        local_var_req_builder =
-            local_var_req_builder.header("Prefer", local_var_param_value.to_string());
-    }
-    local_var_req_builder = local_var_req_builder.json(&datasets);
+    */
+    local_var_req_builder = local_var_req_builder.header(
+        reqwest::header::USER_AGENT,
+        configuration.user_agent.clone(),
+    );
+    // Use JWT for auth
+    local_var_req_builder = local_var_req_builder.header(
+        "Authorization",
+        format!("Bearer {}", configuration.bearer_access_token),
+    );
+    // Get json of created Dataset in response
+    local_var_req_builder = local_var_req_builder.header("Prefer", "return=representation");
+
+    println!("reqbody: {}", request_body);
+    local_var_req_builder = local_var_req_builder.json(&request_body);
 
     let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
+    println!("headers: {:?}", local_var_req.headers());
+    let local_var_resp = local_var_client
+        .execute(local_var_req)?
+        .error_for_status()?;
 
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
+    println!("status: {}", local_var_resp.status());
+    let local_var_content = local_var_resp.text()?;
+    println!("content: {}", local_var_content);
 
-    if local_var_status.is_success() {
-        Ok(())
-    } else {
-        let local_var_entity: Option<DatasetsPostError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
-    }
+    let mut datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    datasets
+        .pop()
+        .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
+}
+
+#[cfg(test)]
+mod test {
+    // TODO: how to mock responses? test network and server failures, 502 responses, etc.
 }

@@ -34,7 +34,7 @@ pub struct AwsS3 {
 
 #[derive(Debug, Deserialize)]
 pub struct AppConfig {
-    pub database: Option<Database>,
+    pub database: Database,
     pub digitalocean_spaces: Option<DigitalOceanSpaces>,
     pub aws_s3: Option<AwsS3>,
 }
@@ -127,7 +127,7 @@ mod tests {
         let config = AppConfig::fetch().unwrap();
 
         // Check the values
-        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
+        assert_eq!(config.database.jwt, "abc");
         assert_eq!(config.digitalocean_spaces.as_ref().unwrap().api_key, "abc");
         assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
         assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
@@ -143,7 +143,7 @@ mod tests {
         let config = AppConfig::fetch().unwrap();
 
         // Check the values
-        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
+        assert_eq!(config.database.jwt, "abc");
         assert!(config.digitalocean_spaces.as_ref().is_none());
         assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
         assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
@@ -195,6 +195,6 @@ mod tests {
         let config = AppConfig::fetch().unwrap();
 
         // Check value was modified
-        assert_eq!(config.database.as_ref().unwrap().jwt, "new jwt");
+        assert_eq!(config.database.jwt, "new jwt");
     }
 }

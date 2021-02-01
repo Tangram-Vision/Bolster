@@ -35,7 +35,7 @@ features = ["yaml"]
 [dependencies.reqwest]
 version = "^0.10"
 default-features = false
-features = ["json"]
+features = ["json", "blocking"]
 
 [dev-dependencies]
 assert_cmd = "1.0.1"

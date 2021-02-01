@@ -39,8 +39,7 @@ fn main() -> Result<()> {
     let _guard = slog_scope::set_global_logger(utils::logger::default_root_logger()?);
     let _log_guard = slog_stdlog::init()?;
 
-    // Initialize Configuration
-    // TODO: pull config from next to binary or from ~/.config/tangram_bolster.toml or only from cmdline arg or something
+    // Initialize Configuration with defaults
     let config_contents = include_str!("resources/default_config.toml");
     AppConfig::init(Some(config_contents))?;
 

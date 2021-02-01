@@ -19,7 +19,11 @@
                     "kind": "bin"
                 }
             },
-            "args": [],
+            "args": [
+                "-c",
+                "my_config.toml",
+                "create"
+            ],
             "cwd": "${workspaceFolder}"
         },
         {

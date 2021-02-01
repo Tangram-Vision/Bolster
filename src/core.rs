@@ -3,7 +3,10 @@
 // Proprietary and confidential
 // ----------------------------
 
+pub mod api;
 pub mod commands;
 pub mod error;
 pub mod hazard;
-// TODO: add api, models
+pub mod models;
+
+// TODO: make these not all public?
