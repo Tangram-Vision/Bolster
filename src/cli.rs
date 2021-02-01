@@ -23,6 +23,9 @@ pub fn cli_match() -> Result<()> {
         Some("create") => {
             commands::create_dataset()?;
         }
+        Some("ls") => {
+            commands::list_datasets()?;
+        }
         Some("hazard") => {
             commands::hazard()?;
         }
@@ -57,7 +60,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .about("Set a custom config file")
                 .takes_value(true),
         )
-        .subcommand(App::new("create").about("Create a new dataset"))
+        .subcommand(App::new("create").about("Create a new remote dataset"))
+        .subcommand(App::new("ls").about("List remote datasets"))
         .subcommand(App::new("hazard").about("Generate a hazardous occurance"))
         .subcommand(App::new("error").about("Simulate an error"))
         .subcommand(App::new("config").about("Show Configuration"));

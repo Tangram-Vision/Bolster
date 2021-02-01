@@ -105,103 +105,6 @@ pub async fn datasets_delete(
     }
 }
 
-pub async fn datasets_get(
-    configuration: &configuration::Configuration,
-    uuid: Option<&str>,
-    created_date: Option<&str>,
-    creator_role: Option<&str>,
-    access_role: Option<&str>,
-    url: Option<&str>,
-    metadata: Option<&str>,
-    select: Option<&str>,
-    order: Option<&str>,
-    range: Option<&str>,
-    range_unit: Option<&str>,
-    offset: Option<&str>,
-    limit: Option<&str>,
-    prefer: Option<&str>,
-) -> Result<Vec<>, Error<DatasetsGetError>> {
-    let local_var_client = &configuration.client;
-
-    let local_var_uri_str = format!("{}/datasets", configuration.base_path);
-    let mut local_var_req_builder = local_var_client.get(local_var_uri_str.as_str());
-
-    if let Some(ref local_var_str) = uuid {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("uuid", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = created_date {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("created_date", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = creator_role {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("creator_role", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = access_role {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("access_role", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = url {
-        local_var_req_builder = local_var_req_builder.query(&[("url", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = metadata {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("metadata", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = select {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("select", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = order {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("order", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = offset {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("offset", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
-    }
-    if let Some(ref local_var_user_agent) = configuration.user_agent {
-        local_var_req_builder =
-            local_var_req_builder.header(reqwest::header::USER_AGENT, local_var_user_agent.clone());
-    }
-    if let Some(local_var_param_value) = range {
-        local_var_req_builder =
-            local_var_req_builder.header("Range", local_var_param_value.to_string());
-    }
-    if let Some(local_var_param_value) = range_unit {
-        local_var_req_builder =
-            local_var_req_builder.header("Range-Unit", local_var_param_value.to_string());
-    }
-    if let Some(local_var_param_value) = prefer {
-        local_var_req_builder =
-            local_var_req_builder.header("Prefer", local_var_param_value.to_string());
-    }
-
-    let local_var_req = local_var_req_builder.build()?;
-    let local_var_resp = local_var_client.execute(local_var_req).await?;
-
-    let local_var_status = local_var_resp.status();
-    let local_var_content = local_var_resp.text().await?;
-
-    if local_var_status.is_success() {
-        serde_json::from_str(&local_var_content).map_err(Error::from)
-    } else {
-        let local_var_entity: Option<DatasetsGetError> =
-            serde_json::from_str(&local_var_content).ok();
-        let local_var_error = ResponseContent {
-            status: local_var_status,
-            content: local_var_content,
-            entity: local_var_entity,
-        };
-        Err(Error::ResponseError(local_var_error))
-    }
-}
-
 pub async fn datasets_patch(
     configuration: &configuration::Configuration,
     uuid: Option<&str>,
@@ -272,8 +175,96 @@ pub async fn datasets_patch(
 }
 */
 
+pub fn datasets_get(
+    configuration: &super::Configuration,
+    uuid: Option<&str>,
+    created_date: Option<&str>,
+    creator_role: Option<&str>,
+    access_role: Option<&str>,
+    url: Option<&str>,
+    metadata: Option<&str>,
+    order: Option<&str>,
+    range: Option<&str>,
+    range_unit: Option<&str>,
+    offset: Option<&str>,
+    limit: Option<&str>,
+) -> Result<Vec<Dataset>> {
+    let local_var_client = &configuration.client;
+
+    let local_var_uri_str = format!("{}/datasets", configuration.base_path);
+    let mut local_var_req_builder = local_var_client.get(local_var_uri_str.as_str());
+
+    if let Some(ref local_var_str) = uuid {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("uuid", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = created_date {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("created_date", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = creator_role {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("creator_role", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = access_role {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("access_role", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = url {
+        local_var_req_builder = local_var_req_builder.query(&[("url", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = metadata {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("metadata", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = order {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("order", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = offset {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("offset", &local_var_str.to_string())]);
+    }
+    if let Some(ref local_var_str) = limit {
+        local_var_req_builder =
+            local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
+    }
+    if let Some(local_var_param_value) = range {
+        local_var_req_builder =
+            local_var_req_builder.header("Range", local_var_param_value.to_string());
+    }
+    if let Some(local_var_param_value) = range_unit {
+        local_var_req_builder =
+            local_var_req_builder.header("Range-Unit", local_var_param_value.to_string());
+    }
+
+    local_var_req_builder = local_var_req_builder.header(
+        reqwest::header::USER_AGENT,
+        configuration.user_agent.clone(),
+    );
+    // Use JWT for auth
+    local_var_req_builder = local_var_req_builder.header(
+        "Authorization",
+        format!("Bearer {}", configuration.bearer_access_token),
+    );
+    // Get json of created Dataset in response
+    local_var_req_builder = local_var_req_builder.header("Prefer", "return=representation");
+
+    let local_var_req = local_var_req_builder.build()?;
+    let local_var_resp = local_var_client
+        .execute(local_var_req)?
+        .error_for_status()?;
+
+    println!("status: {}", local_var_resp.status());
+    let local_var_content = local_var_resp.text()?;
+    println!("content: {}", local_var_content);
+
+    let datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    Ok(datasets)
+}
+
 pub fn datasets_post(
-    configuration: &crate::core::api::Configuration,
+    configuration: &super::Configuration,
     // Select is to pick specific fields to return in response
     // select: Option<&str>,
     request_body: serde_json::Value,

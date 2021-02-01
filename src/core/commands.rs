@@ -9,6 +9,7 @@ use serde_json::json;
 
 use super::error;
 use super::hazard;
+use super::models;
 
 use super::api;
 use crate::utils::app_config::AppConfig;
@@ -33,6 +34,23 @@ pub fn create_dataset() -> Result<()> {
     // TODO: make request
     // TODO: display output (new dataset's uuid)
     Ok(())
+}
+
+pub fn list_datasets() -> Result<Vec<models::Dataset>> {
+    // TODO: at first, just create dataset
+    // TODO: later, take optional list of files + upload them to sotrage provider
+
+    // TODO: add context to error to say missing database jwt
+    let jwt = AppConfig::get::<String>("database.jwt")?;
+    let config = api::Configuration::new(jwt);
+    let datasets = api::datasets::datasets_get(
+        &config, None, None, None, None, None, None, None, None, None, None, None,
+    )?;
+    // TODO: handle request error
+    println!("{:?}", datasets);
+    // TODO: make request
+    // TODO: display output (new dataset's uuid)
+    Ok(datasets)
 }
 
 // TODO: add `ls` subcommand
