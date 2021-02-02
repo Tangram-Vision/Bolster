@@ -5,11 +5,6 @@
 
 use serde::{Deserialize, Serialize};
 
-// TODO: fix types in dataset mode
-// TODO: fix types in dataset mode
-// TODO: fix types in dataset mode
-// TODO: fix types in dataset mode
-// TODO: fix types in dataset mode
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Dataset {
     /// Note: This is a Primary Key.<pk/>

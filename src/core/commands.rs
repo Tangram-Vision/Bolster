@@ -16,13 +16,13 @@ use crate::app_config::AppConfig;
 
 pub fn create_dataset() -> Result<()> {
     // TODO: at first, just create dataset
-    // TODO: later, take optional list of files + upload them to sotrage provider
+    // TODO: later, take optional list of files + upload them to storage provider
 
-    // TODO: add context to error to say missing database jwt
     let jwt = AppConfig::get::<String>("database.jwt")?;
     let config = api::Configuration::new(jwt);
     let dataset = api::datasets::datasets_post(
         &config,
+        // TODO: create Dataset model to pass in or just json? metadata is only field needed
         json!({
             "metadata": {"description": "TODO: get from cmdline or prompt"},
             // TODO: remove url -- it will be moved to files table
@@ -31,29 +31,23 @@ pub fn create_dataset() -> Result<()> {
     )?;
     // TODO: handle request error
     println!("{:?}", dataset);
-    // TODO: make request
     // TODO: display output (new dataset's uuid)
     Ok(())
 }
 
 pub fn list_datasets() -> Result<Vec<models::Dataset>> {
-    // TODO: at first, just create dataset
-    // TODO: later, take optional list of files + upload them to sotrage provider
-
-    // TODO: add context to error to say missing database jwt
     let jwt = AppConfig::get::<String>("database.jwt")?;
     let config = api::Configuration::new(jwt);
     let datasets = api::datasets::datasets_get(
         &config, None, None, None, None, None, None, None, None, None, None, None,
     )?;
-    // TODO: handle request error
-    println!("{:?}", datasets);
-    // TODO: make request
-    // TODO: display output (new dataset's uuid)
+
+    // TODO: use generic, customizable formatter (e.g. kubernetes get)
+    for d in datasets.iter() {
+        println!("{} {}", d.uuid, d.created_date);
+    }
     Ok(datasets)
 }
-
-// TODO: add `ls` subcommand
 
 /// Show the configuration file
 pub fn hazard() -> Result<()> {
