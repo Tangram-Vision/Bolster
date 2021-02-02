@@ -23,7 +23,8 @@ pub struct Database {
 
 #[derive(Debug, Deserialize)]
 pub struct DigitalOceanSpaces {
-    pub api_key: String,
+    pub access_key: String,
+    pub secret_key: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -128,7 +129,14 @@ mod tests {
 
         // Check the values
         assert_eq!(config.database.jwt, "abc");
-        assert_eq!(config.digitalocean_spaces.as_ref().unwrap().api_key, "abc");
+        assert_eq!(
+            config.digitalocean_spaces.as_ref().unwrap().access_key,
+            "abc"
+        );
+        assert_eq!(
+            config.digitalocean_spaces.as_ref().unwrap().secret_key,
+            "def"
+        );
         assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
         assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
     }
