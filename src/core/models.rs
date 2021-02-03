@@ -26,6 +26,7 @@ pub struct Dataset {
     pub metadata: serde_json::Value,
 }
 
+/*
 impl Dataset {
     pub fn new(
         uuid: String,
@@ -45,6 +46,7 @@ impl Dataset {
         }
     }
 }
+*/
 
 // https://serde.rs/custom-date-format.html
 mod notz_rfc_3339 {

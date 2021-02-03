@@ -82,6 +82,7 @@ impl AppConfig {
     }
 
     // Set CONFIG
+    /*
     pub fn set(key: &str, value: &str) -> Result<()> {
         {
             // Set Property
@@ -90,6 +91,7 @@ impl AppConfig {
 
         Ok(())
     }
+    */
 
     // Get a single value
     pub fn get<'de, T>(key: &'de str) -> Result<T>
