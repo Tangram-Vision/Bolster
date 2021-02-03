@@ -129,9 +129,13 @@ pub async fn download_file(url: &str) -> Result<()> {
     let key = url
         .replacen("https://", "", 1)
         .split('/')
-        .nth(1)
-        .ok_or_else(|| anyhow!("Unexpected url format: {}", url))?
-        .to_string();
+        .skip(1)
+        .collect::<Vec<&str>>()
+        .join("/");
+    let filename = key
+        .split('/')
+        .last()
+        .ok_or_else(|| anyhow!("Key can't become filename: {}", key))?;
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -142,11 +146,12 @@ pub async fn download_file(url: &str) -> Result<()> {
         ..Default::default()
     };
 
+    println!("request {:?}", req);
     let resp = client.get_object(req).await?;
     println!("response {:?}", resp);
     let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
     let mut body = body.into_async_read();
-    let mut file = File::create("outputfile").await?;
+    let mut file = File::create(filename).await?;
     io::copy(&mut body, &mut file).await?;
     Ok(())
 }
