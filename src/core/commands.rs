@@ -4,15 +4,12 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
-use log::info;
 use serde_json::json;
 use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::error;
-use super::hazard;
 use super::models;
 
 use super::api;
@@ -82,36 +79,10 @@ pub fn upload_file(uuid: Uuid, path: &Path) -> Result<()> {
 }
 
 /// Show the configuration file
-pub fn hazard() -> Result<()> {
-    // Generate, randomly, True or False
-    let random_hazard: bool = hazard::generate_hazard()?;
-
-    if random_hazard {
-        println!("You got it right!");
-    } else {
-        println!("You got it wrong!");
-    }
-
-    Ok(())
-}
-
-/// Show the configuration file
 pub fn config() -> Result<()> {
     let config = AppConfig::fetch()?;
     println!("{:#?}", config);
 
-    Ok(())
-}
-
-/// Simulate an error
-pub fn simulate_error() -> Result<()> {
-    // Log this Error simulation
-    info!("We are simulating an error");
-
-    // Simulate an error
-    error::simulate_error()?;
-
-    // We should never get here...
     Ok(())
 }
 

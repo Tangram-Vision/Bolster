@@ -5,8 +5,6 @@
 
 pub mod api;
 pub mod commands;
-pub mod error;
-pub mod hazard;
 pub mod models;
 
 // TODO: make these not all public?

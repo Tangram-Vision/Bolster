@@ -45,19 +45,6 @@ pub fn cli_match() -> Result<()> {
             // should probably be logged in case it executed.
         }
     }
-    match cli_matches.subcommand_name() {
-        Some("hazard") => {
-            commands::hazard()?;
-        }
-        Some("error") => {
-            commands::simulate_error()?;
-        }
-        _ => {
-            // Arguments are required by default (in Clap)
-            // This section should never execute and thus
-            // should probably be logged in case it executed.
-        }
-    }
     Ok(())
 }
 
