@@ -37,6 +37,13 @@ pub fn cli_match() -> Result<()> {
             let url = commands::upload_file(dataset_uuid, Path::new(input_file))?;
             commands::update_dataset(dataset_uuid, url)?;
         }
+        Some(("download", download_matches)) => {
+            // Safe to unwrap because argument is required
+            let dataset_uuid: Uuid = download_matches
+                .value_of_t("dataset_uuid")
+                .unwrap_or_else(|e| e.exit());
+            commands::download_file(dataset_uuid)?;
+        }
         Some(("config", _config_matches)) => {
             commands::config()?;
         }
@@ -78,8 +85,12 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .takes_value(true),
                 ),
         )
-        .subcommand(App::new("hazard").about("Generate a hazardous occurance"))
-        .subcommand(App::new("error").about("Simulate an error"))
+        .subcommand(
+            App::new("download")
+                .about("Download files in remote dataset")
+                .arg(Arg::new("dataset_uuid").required(true).takes_value(true)),
+            // TODO: add path to download files to?
+        )
         .subcommand(App::new("config").about("Show Configuration"));
 
     // Get matches

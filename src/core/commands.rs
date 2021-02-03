@@ -89,6 +89,32 @@ pub fn upload_file(uuid: Uuid, path: &Path) -> Result<String> {
     Ok(url)
 }
 
+// TODO: accept a callback for updating database entries?
+pub fn download_file(uuid: Uuid) -> Result<()> {
+    // TODO: duplicated with list_datasets command above
+    let jwt = AppConfig::get::<String>("database.jwt")?;
+    let config = api::Configuration::new(jwt);
+    let datasets = api::datasets::datasets_get(
+        &config,
+        Some(uuid),
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )?;
+    // TODO: test error case here
+    let dataset = &datasets[0];
+
+    api::storage::download_file(&dataset.url)?;
+    Ok(())
+}
+
 /// Show the configuration file
 pub fn config() -> Result<()> {
     let config = AppConfig::fetch()?;

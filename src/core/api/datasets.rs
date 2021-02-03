@@ -153,7 +153,7 @@ pub fn datasets_patch(
 
 pub fn datasets_get(
     configuration: &super::Configuration,
-    uuid: Option<&str>,
+    uuid: Option<Uuid>,
     created_date: Option<&str>,
     creator_role: Option<&str>,
     access_role: Option<&str>,

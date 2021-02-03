@@ -8,8 +8,10 @@
 use anyhow::{anyhow, Result};
 use rusoto_core::{request, Region};
 use rusoto_credential::StaticProvider;
-use rusoto_s3::{PutObjectRequest, S3Client, S3};
+use rusoto_s3::{GetObjectRequest, PutObjectRequest, S3Client, S3};
 use std::convert::TryFrom;
+use tokio::fs::File;
+use tokio::io;
 
 use crate::app_config::AppConfig;
 
@@ -101,4 +103,50 @@ pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> R
     println!("response {:?}", resp);
     // TODO: get version_id and store to database
     Ok(url)
+}
+
+// TODO: Use reqwest Url type
+#[tokio::main]
+pub async fn download_file(url: &str) -> Result<()> {
+    // TODO: Is there a better way to do this, like how try_from works for getting upload config?
+    let app_config = AppConfig::fetch()?;
+    let config;
+    if url.contains("amazonaws.com") {
+        let s3_config = app_config
+            .digitalocean_spaces
+            .ok_or_else(|| anyhow!("Missing DigitalOcean API keys to download: {}", url))?;
+        config = aws_s3::new_config(s3_config.access_key, s3_config.secret_key);
+    } else if url.contains("digitaloceanspaces.com") {
+        let do_config = app_config
+            .digitalocean_spaces
+            .ok_or_else(|| anyhow!("Missing DigitalOcean API keys to download: {}", url))?;
+        config = digitalocean_spaces::new_config(do_config.access_key, do_config.secret_key);
+    } else {
+        return Err(anyhow!("Trying to download from unknown storage provider!"));
+    }
+
+    // TODO: store provider, bucket, and key separately in database?
+    let key = url
+        .replacen("https://", "", 1)
+        .split('/')
+        .nth(1)
+        .ok_or_else(|| anyhow!("Unexpected url format: {}", url))?
+        .to_string();
+
+    let dispatcher = request::HttpClient::new().unwrap();
+    // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+    let client = S3Client::new_with(dispatcher, config.credentials, config.region);
+    let req = GetObjectRequest {
+        bucket: config.bucket,
+        key: key.to_owned(),
+        ..Default::default()
+    };
+
+    let resp = client.get_object(req).await?;
+    println!("response {:?}", resp);
+    let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
+    let mut body = body.into_async_read();
+    let mut file = File::create("outputfile").await?;
+    io::copy(&mut body, &mut file).await?;
+    Ok(())
 }
