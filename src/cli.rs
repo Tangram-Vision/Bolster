@@ -7,6 +7,7 @@ use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
 use std::path::Path;
+use uuid::Uuid;
 
 use crate::app_config::AppConfig;
 use crate::core::commands;
@@ -20,25 +21,36 @@ pub fn cli_match() -> Result<()> {
     AppConfig::merge_config(cli_matches.value_of("config"))?;
 
     // Matches Commands or display help
-    match cli_matches.subcommand_name() {
-        Some("create") => {
+    match cli_matches.subcommand() {
+        Some(("create", create_matches)) => {
             commands::create_dataset()?;
         }
-        Some("ls") => {
+        Some(("ls", ls_matches)) => {
             commands::list_datasets()?;
         }
-        Some("upload") => {
-            // TODO: send file paths in
-            commands::upload_file(Path::new("hello.txt"))?;
+        Some(("upload", upload_matches)) => {
+            // Safe to unwrap because argument is required
+            let dataset_uuid: Uuid = upload_matches
+                .value_of_t("dataset_uuid")
+                .unwrap_or_else(|e| e.exit());
+            let input_file = upload_matches.value_of("file").unwrap();
+            commands::upload_file(dataset_uuid, Path::new(input_file))?;
         }
+        Some(("config", config_matches)) => {
+            commands::config()?;
+        }
+        _ => {
+            // Arguments are required by default (in Clap)
+            // This section should never execute and thus
+            // should probably be logged in case it executed.
+        }
+    }
+    match cli_matches.subcommand_name() {
         Some("hazard") => {
             commands::hazard()?;
         }
         Some("error") => {
             commands::simulate_error()?;
-        }
-        Some("config") => {
-            commands::config()?;
         }
         _ => {
             // Arguments are required by default (in Clap)
@@ -70,7 +82,13 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
         .subcommand(
             App::new("upload")
                 .about("Upload file to remote dataset")
-                .arg(Arg::new("file").required(true).takes_value(true)),
+                .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
+                .arg(
+                    Arg::new("file")
+                        .required(true)
+                        .value_name("FILE")
+                        .takes_value(true),
+                ),
         )
         .subcommand(App::new("hazard").about("Generate a hazardous occurance"))
         .subcommand(App::new("error").about("Simulate an error"))

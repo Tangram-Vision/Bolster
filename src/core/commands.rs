@@ -9,6 +9,7 @@ use serde_json::json;
 use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
+use uuid::Uuid;
 
 use super::error;
 use super::hazard;
@@ -55,7 +56,7 @@ pub fn list_datasets() -> Result<Vec<models::Dataset>> {
 
 // TODO: accept a callback for updating database entries?
 // TODO: expect dataset uuid
-pub fn upload_file(path: &Path) -> Result<()> {
+pub fn upload_file(uuid: Uuid, path: &Path) -> Result<()> {
     // TODO: write a test for when file doesn't exist
 
     // TODO: change to
@@ -70,6 +71,7 @@ pub fn upload_file(path: &Path) -> Result<()> {
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
+    let key = format!("{}/{}", uuid, key);
     // Use DO bucket, region, and credentials if credentials are configured
     // Otherwise, try to us AWS S3 bucket/region/credentials
     // TODO: Refactor, something like? DoProvider::from(config).else(S3Provider::from(config)).else(Err)
