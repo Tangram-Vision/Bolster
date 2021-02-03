@@ -113,7 +113,7 @@ pub async fn download_file(url: &str) -> Result<()> {
     let config;
     if url.contains("amazonaws.com") {
         let s3_config = app_config
-            .digitalocean_spaces
+            .aws_s3
             .ok_or_else(|| anyhow!("Missing DigitalOcean API keys to download: {}", url))?;
         config = aws_s3::new_config(s3_config.access_key, s3_config.secret_key);
     } else if url.contains("digitaloceanspaces.com") {
