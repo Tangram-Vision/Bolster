@@ -52,6 +52,7 @@ pub mod aws_s3 {
     }
 }
 
+// TODO: what if we want a cmdline flag in the future to select AWS or DO specifically?
 impl TryFrom<AppConfig> for StorageConfig {
     type Error = anyhow::Error;
 
@@ -68,6 +69,7 @@ impl TryFrom<AppConfig> for StorageConfig {
                 s3_config.secret_key,
             ));
         };
+        // Don't expose DigitalOcean to customer builds of this CLI... use feature flag?
         Err(anyhow!("Missing AWS S3 config"))
     }
 }
@@ -80,16 +82,14 @@ pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> R
     };
     // Constructing url here to avoid borrow errors if we try to construct it at
     // the bottom of the function
+    // TODO: Use reqwest Url type
     let url = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
     let req = PutObjectRequest {
-        // bucket: "tangs-stage".to_owned(),
         bucket: config.bucket,
-        // TODO: use actual file
-        // TODO: how to build key?
         body: Some(data.into()),
         key,
         ..Default::default()
