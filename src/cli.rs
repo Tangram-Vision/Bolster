@@ -22,10 +22,10 @@ pub fn cli_match() -> Result<()> {
 
     // Matches Commands or display help
     match cli_matches.subcommand() {
-        Some(("create", create_matches)) => {
+        Some(("create", _create_matches)) => {
             commands::create_dataset()?;
         }
-        Some(("ls", ls_matches)) => {
+        Some(("ls", _ls_matches)) => {
             commands::list_datasets()?;
         }
         Some(("upload", upload_matches)) => {
@@ -36,7 +36,7 @@ pub fn cli_match() -> Result<()> {
             let input_file = upload_matches.value_of("file").unwrap();
             commands::upload_file(dataset_uuid, Path::new(input_file))?;
         }
-        Some(("config", config_matches)) => {
+        Some(("config", _config_matches)) => {
             commands::config()?;
         }
         _ => {
