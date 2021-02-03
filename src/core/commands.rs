@@ -5,9 +5,8 @@
 
 use anyhow::{anyhow, Result};
 use log::info;
-use rusoto_core::Region;
-use rusoto_credential::StaticProvider;
 use serde_json::json;
+use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
 
@@ -16,6 +15,7 @@ use super::hazard;
 use super::models;
 
 use super::api;
+use super::api::storage::StorageConfig;
 use crate::app_config::AppConfig;
 
 pub fn create_dataset() -> Result<()> {
@@ -63,9 +63,6 @@ pub fn upload_file(path: &Path) -> Result<()> {
     // of BufRead trait to handle big files
     let contents = fs::read(path)?;
 
-    let region;
-    let credentials;
-    let bucket;
     // TODO: prefix key with dataset uuid
     // TODO: test these error cases
     let key = path
@@ -76,48 +73,9 @@ pub fn upload_file(path: &Path) -> Result<()> {
     // Use DO bucket, region, and credentials if credentials are configured
     // Otherwise, try to us AWS S3 bucket/region/credentials
     // TODO: Refactor, something like? DoProvider::from(config).else(S3Provider::from(config)).else(Err)
-    if let Ok(config) = AppConfig::fetch() {
-        if let Some(do_config) = config.digitalocean_spaces {
-            if !do_config.access_key.is_empty() && !do_config.secret_key.is_empty() {
-                region = Region::Custom {
-                    name: "sfo2".to_owned(),
-                    endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
-                };
-                bucket = "tangs-stage";
-                credentials = StaticProvider::new_minimal(
-                    // TODO: change unwrap to fail gracefully
-                    do_config.access_key,
-                    do_config.secret_key,
-                );
-            } else {
-                return Err(anyhow!(
-                    "No configuration found for cloud storage provider (e.g. S3)"
-                ));
-            }
-        } else {
-            if let Some(aws_config) = config.aws_s3 {
-                if !aws_config.access_key.is_empty() && !aws_config.secret_key.is_empty() {
-                    region = Region::UsEast2;
-                    bucket = "tangram-datasets";
-                    credentials =
-                        StaticProvider::new_minimal(aws_config.access_key, aws_config.secret_key);
-                } else {
-                    return Err(anyhow!(
-                        "No configuration found for cloud storage provider (e.g. S3)"
-                    ));
-                }
-            } else {
-                return Err(anyhow!(
-                    "No configuration found for cloud storage provider (e.g. S3)"
-                ));
-            }
-        }
-    } else {
-        return Err(anyhow!(
-            "No configuration found for cloud storage provider (e.g. S3)"
-        ));
-    }
-    api::storage::upload_file(contents, bucket, key, region, credentials)?;
+    let config = AppConfig::fetch()?;
+    let storage_config = StorageConfig::try_from(config)?;
+    api::storage::upload_file(contents, key, storage_config)?;
     Ok(())
 }
 
