@@ -118,7 +118,8 @@ pub fn datasets_patch(
     let local_var_uri_str = format!("{}/datasets", configuration.base_path);
     let mut local_var_req_builder = local_var_client.patch(local_var_uri_str.as_str());
 
-    local_var_req_builder = local_var_req_builder.query(&[("uuid", uuid.to_string())]);
+    local_var_req_builder =
+        local_var_req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
 
     local_var_req_builder = local_var_req_builder.header(
         reqwest::header::USER_AGENT,
@@ -137,9 +138,7 @@ pub fn datasets_patch(
 
     let local_var_req = local_var_req_builder.build()?;
     println!("request: {:?}", local_var_req);
-    let local_var_resp = local_var_client
-        .execute(local_var_req)?
-        .error_for_status()?;
+    let local_var_resp = local_var_client.execute(local_var_req)?;
 
     println!("status: {}", local_var_resp.status());
     let local_var_content = local_var_resp.text()?;
@@ -172,38 +171,39 @@ pub fn datasets_get(
 
     if let Some(ref local_var_str) = uuid {
         local_var_req_builder =
-            local_var_req_builder.query(&[("uuid", &local_var_str.to_string())]);
+            local_var_req_builder.query(&[("uuid", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = created_date {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("created_date", &local_var_str.to_string())]);
+        local_var_req_builder = local_var_req_builder
+            .query(&[("created_date", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = creator_role {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("creator_role", &local_var_str.to_string())]);
+        local_var_req_builder = local_var_req_builder
+            .query(&[("creator_role", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = access_role {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("access_role", &local_var_str.to_string())]);
+        local_var_req_builder = local_var_req_builder
+            .query(&[("access_role", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = url {
-        local_var_req_builder = local_var_req_builder.query(&[("url", &local_var_str.to_string())]);
+        local_var_req_builder =
+            local_var_req_builder.query(&[("url", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = metadata {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("metadata", &local_var_str.to_string())]);
+        local_var_req_builder = local_var_req_builder
+            .query(&[("metadata", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = order {
         local_var_req_builder =
-            local_var_req_builder.query(&[("order", &local_var_str.to_string())]);
+            local_var_req_builder.query(&[("order", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = offset {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("offset", &local_var_str.to_string())]);
+        local_var_req_builder = local_var_req_builder
+            .query(&[("offset", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(ref local_var_str) = limit {
         local_var_req_builder =
-            local_var_req_builder.query(&[("limit", &local_var_str.to_string())]);
+            local_var_req_builder.query(&[("limit", format!("eq.{}", &local_var_str.to_string()))]);
     }
     if let Some(local_var_param_value) = range {
         local_var_req_builder =
