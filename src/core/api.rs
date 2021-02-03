@@ -4,7 +4,7 @@
 // ----------------------------
 
 pub mod datasets;
-pub mod digitalocean_spaces;
+pub mod storage;
 
 // TODO: Expose API functions we need to call from elsewhere
 // pub use datasets::{datasets_create, etc...};

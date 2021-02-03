@@ -3,9 +3,13 @@
 // Proprietary and confidential
 // ----------------------------
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use log::info;
+use rusoto_core::Region;
+use rusoto_credential::StaticProvider;
 use serde_json::json;
+use std::fs;
+use std::path::Path;
 
 use super::error;
 use super::hazard;
@@ -47,6 +51,74 @@ pub fn list_datasets() -> Result<Vec<models::Dataset>> {
         println!("{} {}", d.uuid, d.created_date);
     }
     Ok(datasets)
+}
+
+// TODO: accept a callback for updating database entries?
+// TODO: expect dataset uuid
+pub fn upload_file(path: &Path) -> Result<()> {
+    // TODO: write a test for when file doesn't exist
+
+    // TODO: change to
+    // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
+    // of BufRead trait to handle big files
+    let contents = fs::read(path)?;
+
+    let region;
+    let credentials;
+    let bucket;
+    // TODO: prefix key with dataset uuid
+    // TODO: test these error cases
+    let key = path
+        .file_name()
+        .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
+        .to_str()
+        .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
+    // Use DO bucket, region, and credentials if credentials are configured
+    // Otherwise, try to us AWS S3 bucket/region/credentials
+    // TODO: Refactor, something like? DoProvider::from(config).else(S3Provider::from(config)).else(Err)
+    if let Ok(config) = AppConfig::fetch() {
+        if let Some(do_config) = config.digitalocean_spaces {
+            if !do_config.access_key.is_empty() && !do_config.secret_key.is_empty() {
+                region = Region::Custom {
+                    name: "sfo2".to_owned(),
+                    endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
+                };
+                bucket = "tangs-stage";
+                credentials = StaticProvider::new_minimal(
+                    // TODO: change unwrap to fail gracefully
+                    do_config.access_key,
+                    do_config.secret_key,
+                );
+            } else {
+                return Err(anyhow!(
+                    "No configuration found for cloud storage provider (e.g. S3)"
+                ));
+            }
+        } else {
+            if let Some(aws_config) = config.aws_s3 {
+                if !aws_config.access_key.is_empty() && !aws_config.secret_key.is_empty() {
+                    region = Region::UsEast2;
+                    bucket = "tangram-datasets";
+                    credentials =
+                        StaticProvider::new_minimal(aws_config.access_key, aws_config.secret_key);
+                } else {
+                    return Err(anyhow!(
+                        "No configuration found for cloud storage provider (e.g. S3)"
+                    ));
+                }
+            } else {
+                return Err(anyhow!(
+                    "No configuration found for cloud storage provider (e.g. S3)"
+                ));
+            }
+        }
+    } else {
+        return Err(anyhow!(
+            "No configuration found for cloud storage provider (e.g. S3)"
+        ));
+    }
+    api::storage::upload_file(contents, bucket, key, region, credentials)?;
+    Ok(())
 }
 
 /// Show the configuration file

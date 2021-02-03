@@ -6,6 +6,7 @@
 use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
+use std::path::Path;
 
 use crate::app_config::AppConfig;
 use crate::core::commands;
@@ -25,6 +26,10 @@ pub fn cli_match() -> Result<()> {
         }
         Some("ls") => {
             commands::list_datasets()?;
+        }
+        Some("upload") => {
+            // TODO: send file paths in
+            commands::upload_file(Path::new("hello.txt"))?;
         }
         Some("hazard") => {
             commands::hazard()?;
@@ -62,6 +67,11 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
         )
         .subcommand(App::new("create").about("Create a new remote dataset"))
         .subcommand(App::new("ls").about("List remote datasets"))
+        .subcommand(
+            App::new("upload")
+                .about("Upload file to remote dataset")
+                .arg(Arg::new("file").required(true).takes_value(true)),
+        )
         .subcommand(App::new("hazard").about("Generate a hazardous occurance"))
         .subcommand(App::new("error").about("Simulate an error"))
         .subcommand(App::new("config").about("Show Configuration"));
