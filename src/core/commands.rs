@@ -46,14 +46,25 @@ pub fn list_datasets() -> Result<Vec<models::Dataset>> {
 
     // TODO: use generic, customizable formatter (e.g. kubernetes get)
     for d in datasets.iter() {
-        println!("{} {}", d.uuid, d.created_date);
+        println!("{} {} {}", d.uuid, d.created_date, d.url);
     }
     Ok(datasets)
 }
 
+pub fn update_dataset(uuid: Uuid, url: String) -> Result<()> {
+    // TODO: change to update files (not datasets) when files are their own db table
+
+    let jwt = AppConfig::get::<String>("database.jwt")?;
+    let config = api::Configuration::new(jwt);
+    let dataset = api::datasets::datasets_patch(&config, uuid, &url)?;
+    // TODO: handle request error
+    println!("{:?}", dataset);
+    // TODO: display output (new dataset's uuid)
+    Ok(())
+}
+
 // TODO: accept a callback for updating database entries?
-// TODO: expect dataset uuid
-pub fn upload_file(uuid: Uuid, path: &Path) -> Result<()> {
+pub fn upload_file(uuid: Uuid, path: &Path) -> Result<String> {
     // TODO: write a test for when file doesn't exist
 
     // TODO: change to
@@ -61,7 +72,6 @@ pub fn upload_file(uuid: Uuid, path: &Path) -> Result<()> {
     // of BufRead trait to handle big files
     let contents = fs::read(path)?;
 
-    // TODO: prefix key with dataset uuid
     // TODO: test these error cases
     let key = path
         .file_name()
@@ -69,13 +79,14 @@ pub fn upload_file(uuid: Uuid, path: &Path) -> Result<()> {
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
     let key = format!("{}/{}", uuid, key);
+
+    let config = AppConfig::fetch()?;
     // Use DO bucket, region, and credentials if credentials are configured
     // Otherwise, try to us AWS S3 bucket/region/credentials
-    // TODO: Refactor, something like? DoProvider::from(config).else(S3Provider::from(config)).else(Err)
-    let config = AppConfig::fetch()?;
     let storage_config = StorageConfig::try_from(config)?;
-    api::storage::upload_file(contents, key, storage_config)?;
-    Ok(())
+
+    let url = api::storage::upload_file(contents, key, storage_config)?;
+    Ok(url)
 }
 
 /// Show the configuration file

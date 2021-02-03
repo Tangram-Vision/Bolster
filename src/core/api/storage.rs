@@ -71,7 +71,15 @@ impl TryFrom<AppConfig> for StorageConfig {
 }
 
 #[tokio::main]
-pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> Result<()> {
+pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> Result<String> {
+    let region_endpoint = match &config.region {
+        Region::Custom { endpoint, .. } => endpoint.clone(),
+        r => format!("s3.{}.amazonaws.com", r.name()),
+    };
+    // Constructing url here to avoid borrow errors if we try to construct it at
+    // the bottom of the function
+    let url = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
+
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
@@ -81,7 +89,7 @@ pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> R
         // TODO: use actual file
         // TODO: how to build key?
         body: Some(data.into()),
-        key: key,
+        key,
         ..Default::default()
     };
     // just spawn tokio here and use it, instead of async-ing everything yet
@@ -92,5 +100,5 @@ pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> R
     let resp = client.put_object(req).await?;
     println!("response {:?}", resp);
     // TODO: get version_id and store to database
-    Ok(())
+    Ok(url)
 }

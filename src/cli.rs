@@ -34,7 +34,8 @@ pub fn cli_match() -> Result<()> {
                 .value_of_t("dataset_uuid")
                 .unwrap_or_else(|e| e.exit());
             let input_file = upload_matches.value_of("file").unwrap();
-            commands::upload_file(dataset_uuid, Path::new(input_file))?;
+            let url = commands::upload_file(dataset_uuid, Path::new(input_file))?;
+            commands::update_dataset(dataset_uuid, url)?;
         }
         Some(("config", _config_matches)) => {
             commands::config()?;
