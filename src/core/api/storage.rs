@@ -13,7 +13,8 @@ use tokio::fs::File;
 use tokio::io;
 
 #[cfg(feature = "tangram-internal")]
-use crate::app_config::{AwsS3Config, DigitalOceanSpacesConfig, StorageProviderChoices};
+use crate::app_config::DigitalOceanSpacesConfig;
+use crate::app_config::{AwsS3Config, StorageProviderChoices};
 
 pub struct StorageConfig {
     credentials: StaticProvider,
