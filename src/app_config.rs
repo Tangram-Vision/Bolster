@@ -64,11 +64,11 @@ impl Default for StorageProviderChoices {
     }
 }
 
-// Used only for `config` subcommand to show all config.
-// When interacting with the database, the DatabaseConfig below is used. When
-// the code knows which storage provider to use for upload/download, it
-// deserializes the config with DigitalOceanSpacesConfig or AwsS3Config, as
-// appropriate.
+/// Used only for `config` subcommand to show all config.
+/// When interacting with the database, the DatabaseConfig below is used. When
+/// the code knows which storage provider to use for upload/download, it
+/// deserializes the config with DigitalOceanSpacesConfig or AwsS3Config, as
+/// appropriate.
 #[derive(Debug, Deserialize)]
 pub struct CompleteAppConfig {
     pub database: Database,
