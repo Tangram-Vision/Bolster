@@ -4,7 +4,7 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 
 // TODO: should this be "UploadStorageProviderChoices"?
@@ -57,7 +57,7 @@ impl Default for StorageProviderChoices {
 /// the code knows which storage provider to use for upload/download, it
 /// deserializes the config with DigitalOceanSpacesConfig or AwsS3Config, as
 /// appropriate.
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CompleteAppConfig {
     pub database: Database,
     #[cfg(feature = "tangram-internal")]
@@ -65,12 +65,12 @@ pub struct CompleteAppConfig {
     pub aws_s3: Option<StorageApiKeys>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DatabaseConfig {
     pub database: Database,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Database {
     pub jwt: String,
 }
@@ -86,7 +86,7 @@ pub struct AwsS3Config {
     pub aws_s3: StorageApiKeys,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct StorageApiKeys {
     pub access_key: String,
     pub secret_key: String,
