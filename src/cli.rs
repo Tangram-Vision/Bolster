@@ -20,7 +20,7 @@ use crate::core::commands;
 pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
     // Handle config subcommand first, because it doesn't need any valid configuration, and is helpful for debugging bad config!
     if let Some(("config", _config_matches)) = cli_matches.subcommand() {
-        commands::config(config)?;
+        commands::print_config(config)?;
         return Ok(());
     }
 

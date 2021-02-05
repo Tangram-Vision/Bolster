@@ -89,7 +89,7 @@ pub fn download_file(config: config::Config, url: &str) -> Result<()> {
 }
 
 /// Show the configuration file
-pub fn config(config: config::Config) -> Result<()> {
+pub fn print_config(config: config::Config) -> Result<()> {
     let storage_config: crate::app_config::CompleteAppConfig = config.try_into()?;
     println!("{:#?}", storage_config);
 
