@@ -9,11 +9,12 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::models;
-
 use super::api;
+use super::api::datasets;
+use super::api::storage;
 use super::api::storage::StorageConfig;
-use crate::app_config::StorageProviderChoices;
+use super::models::Dataset;
+use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
 pub fn create_dataset(config: &api::Configuration) -> Result<()> {
     // TODO: at first, just create dataset
@@ -21,7 +22,7 @@ pub fn create_dataset(config: &api::Configuration) -> Result<()> {
 
     // TODO: derive api::Configuration from config::Config
     // TODO: do it in cli.rs before calling any subcommands? printing out config doesn't require api config though
-    let dataset = api::datasets::datasets_post(
+    let dataset = datasets::datasets_post(
         config,
         // TODO: create Dataset model to pass in or just json? metadata is only field needed
         json!({
@@ -36,11 +37,8 @@ pub fn create_dataset(config: &api::Configuration) -> Result<()> {
     Ok(())
 }
 
-pub fn list_datasets(
-    config: &api::Configuration,
-    uuid: Option<Uuid>,
-) -> Result<Vec<models::Dataset>> {
-    let datasets = api::datasets::datasets_get(
+pub fn list_datasets(config: &api::Configuration, uuid: Option<Uuid>) -> Result<Vec<Dataset>> {
+    let datasets = datasets::datasets_get(
         config, uuid, None, None, None, None, None, None, None, None, None, None,
     )?;
 
@@ -50,14 +48,13 @@ pub fn list_datasets(
 pub fn update_dataset(config: &api::Configuration, uuid: Uuid, url: String) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
-    let dataset = api::datasets::datasets_patch(config, uuid, &url)?;
+    let dataset = datasets::datasets_patch(config, uuid, &url)?;
     // TODO: handle request error
     println!("{:?}", dataset);
     // TODO: display output (new dataset's uuid)
     Ok(())
 }
 
-// TODO: accept a callback for updating database entries?
 pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<String> {
     // TODO: write a test for when file doesn't exist
 
@@ -74,23 +71,22 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Str
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
     let key = format!("{}/{}", uuid, key);
 
-    let url = api::storage::upload_file(config, contents, key)?;
+    let url = storage::upload_file(config, contents, key)?;
     Ok(url)
 }
 
-// TODO: accept a callback for updating database entries?
 pub fn download_file(config: config::Config, url: &str) -> Result<()> {
     // Based on url from database, find which StorageProvider's config to use
     let provider = StorageProviderChoices::from_url(url)?;
     let storage_config = StorageConfig::new(config, provider)?;
 
-    api::storage::download_file(storage_config, &url)?;
+    storage::download_file(storage_config, &url)?;
     Ok(())
 }
 
 /// Show the configuration file
 pub fn print_config(config: config::Config) -> Result<()> {
-    let storage_config: crate::app_config::CompleteAppConfig = config.try_into()?;
+    let storage_config: CompleteAppConfig = config.try_into()?;
     println!("{:#?}", storage_config);
 
     Ok(())
