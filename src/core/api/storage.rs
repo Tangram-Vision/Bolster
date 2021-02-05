@@ -6,6 +6,7 @@
 // TODO: extract common code between aws/digitalocean
 
 use anyhow::{anyhow, Result};
+use reqwest::Url;
 use rusoto_core::{request, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, PutObjectRequest, S3Client, S3};
@@ -58,7 +59,7 @@ impl StorageConfig {
 }
 
 #[tokio::main]
-pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> Result<String> {
+pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> Result<Url> {
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
         r => format!("s3.{}.amazonaws.com", r.name()),
@@ -66,7 +67,8 @@ pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> R
     // Constructing url here to avoid borrow errors if we try to construct it at
     // the bottom of the function
     // TODO: Use reqwest Url type
-    let url = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
+    let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
+    let url = Url::parse(&url_str)?;
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -90,16 +92,14 @@ pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> R
 
 // TODO: Use reqwest Url type
 #[tokio::main]
-pub async fn download_file(config: StorageConfig, url: &str) -> Result<()> {
+pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
 
     // TODO: store provider, bucket, and key separately in database?
     let key = url
-        .replacen("https://", "", 1)
-        .split('/')
-        .skip(1)
-        .collect::<Vec<&str>>()
-        .join("/");
+        .path()
+        .strip_prefix("/")
+        .ok_or_else(|| anyhow!("URL path didn't start with /: {}", url.path()))?;
     let filename = key
         .split('/')
         .last()

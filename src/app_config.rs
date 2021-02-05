@@ -4,6 +4,7 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 
@@ -25,8 +26,11 @@ impl StorageProviderChoices {
             StorageProviderChoices::Aws => "amazonaws.com",
         }
     }
-    pub fn from_url(url: &str) -> Result<StorageProviderChoices> {
-        match url {
+    pub fn from_url(url: &Url) -> Result<StorageProviderChoices> {
+        match url
+            .domain()
+            .ok_or_else(|| anyhow!("Storage provider url doesn't contain a domain: {}", url))?
+        {
             x if x.contains(StorageProviderChoices::Aws.url_pattern()) => {
                 Ok(StorageProviderChoices::Aws)
             }

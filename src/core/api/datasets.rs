@@ -5,6 +5,7 @@
 
 use crate::core::models::Dataset;
 use anyhow::{anyhow, Result};
+use reqwest::Url;
 use serde_json::json;
 use uuid::Uuid;
 
@@ -46,7 +47,7 @@ pub async fn datasets_delete(
     created_date: Option<&str>,
     creator_role: Option<&str>,
     access_role: Option<&str>,
-    url: Option<&str>,
+    url: Option<&Url>,
     metadata: Option<&str>,
     prefer: Option<&str>,
 ) -> Result<(), Error<DatasetsDeleteError>> {
@@ -111,7 +112,7 @@ pub async fn datasets_delete(
 pub fn datasets_patch(
     configuration: &super::Configuration,
     uuid: Uuid,
-    url: &str,
+    url: &Url,
 ) -> Result<Dataset> {
     let local_var_client = &configuration.client;
 
@@ -156,7 +157,7 @@ pub fn datasets_get(
     created_date: Option<&str>,
     creator_role: Option<&str>,
     access_role: Option<&str>,
-    url: Option<&str>,
+    url: Option<&Url>,
     metadata: Option<&str>,
     order: Option<&str>,
     range: Option<&str>,

@@ -35,7 +35,7 @@ strum = "0.20"
 strum_macros = "0.20"
 tokio = { version = "1.1", features = ["fs"]}
 toml = "0.5"
-url = "1.5"
+url = { version = "2.2", features = ["serde"]}
 uuid = "0.8"
 
 [dependencies.clap]

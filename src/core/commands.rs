@@ -4,6 +4,7 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
+use reqwest::Url;
 use serde_json::json;
 use std::fs;
 use std::path::Path;
@@ -45,17 +46,17 @@ pub fn list_datasets(config: &api::Configuration, uuid: Option<Uuid>) -> Result<
     Ok(datasets)
 }
 
-pub fn update_dataset(config: &api::Configuration, uuid: Uuid, url: String) -> Result<()> {
+pub fn update_dataset(config: &api::Configuration, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
-    let dataset = datasets::datasets_patch(config, uuid, &url)?;
+    let dataset = datasets::datasets_patch(config, uuid, url)?;
     // TODO: handle request error
     println!("{:?}", dataset);
     // TODO: display output (new dataset's uuid)
     Ok(())
 }
 
-pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<String> {
+pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url> {
     // TODO: write a test for when file doesn't exist
 
     // TODO: change to
@@ -75,12 +76,12 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Str
     Ok(url)
 }
 
-pub fn download_file(config: config::Config, url: &str) -> Result<()> {
+pub fn download_file(config: config::Config, url: &Url) -> Result<()> {
     // Based on url from database, find which StorageProvider's config to use
     let provider = StorageProviderChoices::from_url(url)?;
     let storage_config = StorageConfig::new(config, provider)?;
 
-    storage::download_file(storage_config, &url)?;
+    storage::download_file(storage_config, url)?;
     Ok(())
 }
 

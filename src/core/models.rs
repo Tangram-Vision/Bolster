@@ -4,6 +4,7 @@
 // ----------------------------
 
 use chrono::{DateTime, Utc};
+use reqwest::Url;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -14,7 +15,7 @@ pub struct Dataset {
     pub created_date: DateTime<Utc>,
     pub creator_role: String,
     pub access_role: String,
-    pub url: String,
+    pub url: Url,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
@@ -28,7 +29,7 @@ impl Dataset {
         created_date: DateTime<Utc>,
         creator_role: String,
         access_role: String,
-        url: String,
+        url: Url,
         metadata: serde_json::Value,
     ) -> Dataset {
         Dataset {
