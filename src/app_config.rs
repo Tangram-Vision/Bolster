@@ -38,18 +38,6 @@ impl StorageProviderChoices {
 
             _ => Err(anyhow!("Trying to download from unknown storage provider!")),
         }
-
-        /*
-        // Alternate approach to the above
-        let mut provider = None;
-        for variant in StorageProviderChoices::iter() {
-            if url.contains(variant.url_pattern()) {
-                provider = Some(variant);
-            }
-        }
-        let provider =
-            provider.ok_or_else(|| anyhow!("Trying to download from unknown storage provider!"))?;
-        */
     }
 }
 
