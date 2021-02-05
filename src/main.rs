@@ -6,15 +6,11 @@
 #[cfg(not(debug_assertions))]
 use human_panic::setup_panic;
 
-#[cfg(debug_assertions)]
-extern crate better_panic;
-
 mod app_config;
 mod cli;
 mod core;
 
 use anyhow::Result;
-use app_config::AppConfig;
 
 fn main() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.
@@ -38,10 +34,24 @@ fn main() -> Result<()> {
     // https://gitlab.com/tangram-vision/bolster/-/merge_requests/4
     env_logger::init();
 
-    // Initialize Configuration with defaults
-    let config_contents = include_str!("resources/default_config.toml");
-    AppConfig::init(Some(config_contents))?;
+    // Get CLI arguments and flags (one may have provided the config file to use)
+    let cli_matches = cli::cli_config()?;
 
-    // Match Commands
-    cli::cli_match()
+    let mut settings = config::Config::default();
+    // Use cmdline arg config file if provided, otherwise require config file at default ~/.config/... path
+    if let Some(config_file) = cli_matches.value_of("config") {
+        settings.merge(config::File::with_name(config_file))?;
+    } else {
+        settings.merge(config::File::with_name(
+            "~/.config/tangramvision/bolster.toml",
+        ))?;
+    }
+
+    // Override with environment variables, if present
+    // Example of overriding: BOLSTER__AWS_S3__ACCESS_KEY=abc
+    // (Note double underscore to reach into lower struct levels!)
+    settings.merge(config::Environment::with_prefix("BOLSTER_").separator("__"))?;
+
+    // Match against CLI subcommands, which delegate to functions
+    cli::cli_match(settings, cli_matches)
 }

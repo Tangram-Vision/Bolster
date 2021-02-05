@@ -10,6 +10,12 @@ description = """
 CLI tool for managing Tangram datasets, including upload/download and search/sort/filter.
 """
 
+[features]
+# Determines whether to enable upload/download from DigitalOcean Spaces.
+# External users can only use AWS S3 (because we have better control over
+# permissions with S3).
+tangram-internal = []
+
 [dependencies]
 anyhow = "1.0"
 better-panic = "0.2"
@@ -25,6 +31,8 @@ rusoto_credential = "0.46"
 rusoto_s3 = "0.46"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"]}
+strum = "0.20"
+strum_macros = "0.20"
 tokio = { version = "1.1", features = ["fs"]}
 url = "1.5"
 uuid = "0.8"

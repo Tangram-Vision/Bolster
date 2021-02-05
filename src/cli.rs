@@ -7,50 +7,68 @@ use anyhow::Result;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
 use std::path::Path;
+use std::str::FromStr;
+use strum::VariantNames;
 use uuid::Uuid;
 
-use crate::app_config::AppConfig;
+use crate::app_config::{DatabaseConfig, StorageProviderChoices};
+use crate::core::api;
+use crate::core::api::storage;
 use crate::core::commands;
 
 /// Match commands
-pub fn cli_match() -> Result<()> {
-    // Get matches
-    let cli_matches = cli_config()?;
+pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
+    // Handle config subcommand first, because it doesn't need any valid configuration, and is helpful for debugging bad config!
+    if let Some(("config", _config_matches)) = cli_matches.subcommand() {
+        commands::config(config)?;
+        return Ok(());
+    }
 
-    // Merge clap config file if the value is set
-    AppConfig::merge_config(cli_matches.value_of("config"))?;
+    // Derive config needed for all commands (they all interact with the database)
+    let jwt = config.clone().try_into::<DatabaseConfig>()?.database.jwt;
+    let api_config = api::Configuration::new(jwt);
 
-    // Matches Commands or display help
+    // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
         Some(("create", _create_matches)) => {
-            commands::create_dataset()?;
+            commands::create_dataset(&api_config)?;
         }
         Some(("ls", _ls_matches)) => {
-            commands::list_datasets()?;
+            let datasets = commands::list_datasets(&api_config, None)?;
+
+            // TODO: use generic, customizable formatter (e.g. kubernetes get)
+            for d in datasets.iter() {
+                println!("{} {} {}", d.uuid, d.created_date, d.url);
+            }
         }
         Some(("upload", upload_matches)) => {
-            // Safe to unwrap because argument is required
+            // Safe to unwrap because arguments are required or have defaults
             let dataset_uuid: Uuid = upload_matches
                 .value_of_t("dataset_uuid")
                 .unwrap_or_else(|e| e.exit());
             let input_file = upload_matches.value_of("file").unwrap();
-            let url = commands::upload_file(dataset_uuid, Path::new(input_file))?;
-            commands::update_dataset(dataset_uuid, url)?;
+            let provider =
+                StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
+            let storage_config = storage::StorageConfig::new(config, provider)?;
+            commands::update_dataset(
+                &api_config,
+                dataset_uuid,
+                commands::upload_file(storage_config, dataset_uuid, Path::new(input_file))?,
+            )?;
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_uuid: Uuid = download_matches
                 .value_of_t("dataset_uuid")
                 .unwrap_or_else(|e| e.exit());
-            commands::download_file(dataset_uuid)?;
-        }
-        Some(("config", _config_matches)) => {
-            commands::config()?;
+            let datasets = commands::list_datasets(&api_config, Some(dataset_uuid))?;
+            let dataset = &datasets[0];
+            commands::download_file(config, &dataset.url)?;
         }
         _ => {
-            // Arguments are required by default (in Clap)
-            // This section should never execute and thus
-            // should probably be logged in case it executed.
+            // Arguments are required by default (in Clap).
+            // This section should never execute.
+            unreachable!("No matching subcommand!");
         }
     }
     Ok(())
@@ -59,6 +77,9 @@ pub fn cli_match() -> Result<()> {
 /// Configure Clap
 /// This function will configure clap and match arguments
 pub fn cli_config() -> Result<clap::ArgMatches> {
+    // Can't get default enum variant's &'static str, so own it here
+    let default_storage_provider = StorageProviderChoices::default();
+
     let cli_app = App::new("bolster")
         .setting(AppSettings::ArgRequiredElseHelp)
         .version(crate_version!())
@@ -82,6 +103,16 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                     Arg::new("file")
                         .required(true)
                         .value_name("FILE")
+                        .takes_value(true),
+                )
+                .arg(
+                    Arg::new("provider")
+                        .short('p')
+                        .long("provider")
+                        .value_name("PROVIDER")
+                        .about("Upload to specified cloud storage provider")
+                        .default_value(default_storage_provider.as_ref())
+                        .possible_values(StorageProviderChoices::VARIANTS)
                         .takes_value(true),
                 ),
         )

@@ -5,7 +5,6 @@
 
 use anyhow::{anyhow, Result};
 use serde_json::json;
-use std::convert::TryFrom;
 use std::fs;
 use std::path::Path;
 use uuid::Uuid;
@@ -14,16 +13,16 @@ use super::models;
 
 use super::api;
 use super::api::storage::StorageConfig;
-use crate::app_config::AppConfig;
+use crate::app_config::StorageProviderChoices;
 
-pub fn create_dataset() -> Result<()> {
+pub fn create_dataset(config: &api::Configuration) -> Result<()> {
     // TODO: at first, just create dataset
     // TODO: later, take optional list of files + upload them to storage provider
 
-    let jwt = AppConfig::get::<String>("database.jwt")?;
-    let config = api::Configuration::new(jwt);
+    // TODO: derive api::Configuration from config::Config
+    // TODO: do it in cli.rs before calling any subcommands? printing out config doesn't require api config though
     let dataset = api::datasets::datasets_post(
-        &config,
+        config,
         // TODO: create Dataset model to pass in or just json? metadata is only field needed
         json!({
             "metadata": {"description": "TODO: get from cmdline or prompt"},
@@ -37,26 +36,21 @@ pub fn create_dataset() -> Result<()> {
     Ok(())
 }
 
-pub fn list_datasets() -> Result<Vec<models::Dataset>> {
-    let jwt = AppConfig::get::<String>("database.jwt")?;
-    let config = api::Configuration::new(jwt);
+pub fn list_datasets(
+    config: &api::Configuration,
+    uuid: Option<Uuid>,
+) -> Result<Vec<models::Dataset>> {
     let datasets = api::datasets::datasets_get(
-        &config, None, None, None, None, None, None, None, None, None, None, None,
+        config, uuid, None, None, None, None, None, None, None, None, None, None,
     )?;
 
-    // TODO: use generic, customizable formatter (e.g. kubernetes get)
-    for d in datasets.iter() {
-        println!("{} {} {}", d.uuid, d.created_date, d.url);
-    }
     Ok(datasets)
 }
 
-pub fn update_dataset(uuid: Uuid, url: String) -> Result<()> {
+pub fn update_dataset(config: &api::Configuration, uuid: Uuid, url: String) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
-    let jwt = AppConfig::get::<String>("database.jwt")?;
-    let config = api::Configuration::new(jwt);
-    let dataset = api::datasets::datasets_patch(&config, uuid, &url)?;
+    let dataset = api::datasets::datasets_patch(config, uuid, &url)?;
     // TODO: handle request error
     println!("{:?}", dataset);
     // TODO: display output (new dataset's uuid)
@@ -64,7 +58,7 @@ pub fn update_dataset(uuid: Uuid, url: String) -> Result<()> {
 }
 
 // TODO: accept a callback for updating database entries?
-pub fn upload_file(uuid: Uuid, path: &Path) -> Result<String> {
+pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<String> {
     // TODO: write a test for when file doesn't exist
 
     // TODO: change to
@@ -80,59 +74,39 @@ pub fn upload_file(uuid: Uuid, path: &Path) -> Result<String> {
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
     let key = format!("{}/{}", uuid, key);
 
-    let config = AppConfig::fetch()?;
-    // Use DO bucket, region, and credentials if credentials are configured
-    // Otherwise, try to us AWS S3 bucket/region/credentials
-    let storage_config = StorageConfig::try_from(config)?;
-
-    let url = api::storage::upload_file(contents, key, storage_config)?;
+    let url = api::storage::upload_file(config, contents, key)?;
     Ok(url)
 }
 
 // TODO: accept a callback for updating database entries?
-pub fn download_file(uuid: Uuid) -> Result<()> {
-    // TODO: duplicated with list_datasets command above
-    let jwt = AppConfig::get::<String>("database.jwt")?;
-    let config = api::Configuration::new(jwt);
-    let datasets = api::datasets::datasets_get(
-        &config,
-        Some(uuid),
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )?;
-    // TODO: test error case here
-    let dataset = &datasets[0];
+pub fn download_file(config: config::Config, url: &str) -> Result<()> {
+    // Based on url from database, find which StorageProvider's config to use
+    let provider = StorageProviderChoices::from_url(url)?;
+    let storage_config = StorageConfig::new(config, provider)?;
 
-    api::storage::download_file(&dataset.url)?;
+    api::storage::download_file(storage_config, &url)?;
     Ok(())
 }
 
 /// Show the configuration file
-pub fn config() -> Result<()> {
-    let config = AppConfig::fetch()?;
-    println!("{:#?}", config);
+pub fn config(config: config::Config) -> Result<()> {
+    let storage_config: crate::app_config::CompleteAppConfig = config.try_into()?;
+    println!("{:#?}", storage_config);
 
     Ok(())
 }
 
 #[cfg(test)]
 mod test {
-    use super::create_dataset;
-    use crate::app_config::AppConfig;
+    use crate::app_config::DatabaseConfig;
 
     #[test]
     fn test_missing_database_jwt() {
         // Initialize configuration
-        AppConfig::init(None).unwrap();
-        let error = create_dataset().expect_err("Expected error due to missing database jwt");
+        let config = config::Config::default();
+        let error = config
+            .try_into::<DatabaseConfig>()
+            .expect_err("Expected error due to missing database jwt");
         assert_eq!(
             error.to_string(),
             "configuration property \"database.jwt\" not found"

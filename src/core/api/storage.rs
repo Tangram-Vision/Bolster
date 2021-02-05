@@ -9,11 +9,11 @@ use anyhow::{anyhow, Result};
 use rusoto_core::{request, Region};
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{GetObjectRequest, PutObjectRequest, S3Client, S3};
-use std::convert::TryFrom;
 use tokio::fs::File;
 use tokio::io;
 
-use crate::app_config::AppConfig;
+#[cfg(feature = "tangram-internal")]
+use crate::app_config::{AwsS3Config, DigitalOceanSpacesConfig, StorageProviderChoices};
 
 pub struct StorageConfig {
     credentials: StaticProvider,
@@ -21,61 +21,43 @@ pub struct StorageConfig {
     region: Region,
 }
 
-pub mod digitalocean_spaces {
-    use super::StorageConfig;
-    use rusoto_core::Region;
-    use rusoto_credential::StaticProvider;
-
-    pub fn new_config(access_key: String, secret_key: String) -> StorageConfig {
-        StorageConfig {
-            credentials: StaticProvider::new_minimal(access_key, secret_key),
-            bucket: String::from("tangs-stage"),
-            region: Region::Custom {
-                name: "sfo2".to_owned(),
-                endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
-            },
+impl StorageConfig {
+    pub fn new(config: config::Config, provider: StorageProviderChoices) -> Result<StorageConfig> {
+        match provider {
+            #[cfg(feature = "tangram-internal")]
+            StorageProviderChoices::DigitalOcean => {
+                let do_config = config
+                    .try_into::<DigitalOceanSpacesConfig>()?
+                    .digitalocean_spaces;
+                Ok(StorageConfig {
+                    credentials: StaticProvider::new_minimal(
+                        do_config.access_key,
+                        do_config.secret_key,
+                    ),
+                    bucket: String::from("tangs-stage"),
+                    region: Region::Custom {
+                        name: "sfo2".to_owned(),
+                        endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
+                    },
+                })
+            }
+            StorageProviderChoices::Aws => {
+                let aws_config = config.try_into::<AwsS3Config>()?.aws_s3;
+                Ok(StorageConfig {
+                    credentials: StaticProvider::new_minimal(
+                        aws_config.access_key,
+                        aws_config.secret_key,
+                    ),
+                    bucket: String::from("tangram-datasets"),
+                    region: Region::UsEast2,
+                })
+            }
         }
-    }
-}
-
-pub mod aws_s3 {
-    use super::StorageConfig;
-    use rusoto_core::Region;
-    use rusoto_credential::StaticProvider;
-
-    pub fn new_config(access_key: String, secret_key: String) -> StorageConfig {
-        StorageConfig {
-            credentials: StaticProvider::new_minimal(access_key, secret_key),
-            bucket: String::from("tangram-datasets"),
-            region: Region::UsEast2,
-        }
-    }
-}
-
-// TODO: what if we want a cmdline flag in the future to select AWS or DO specifically?
-impl TryFrom<AppConfig> for StorageConfig {
-    type Error = anyhow::Error;
-
-    fn try_from(config: AppConfig) -> Result<Self> {
-        if let Some(do_config) = config.digitalocean_spaces {
-            return Ok(digitalocean_spaces::new_config(
-                do_config.access_key,
-                do_config.secret_key,
-            ));
-        };
-        if let Some(s3_config) = config.aws_s3 {
-            return Ok(aws_s3::new_config(
-                s3_config.access_key,
-                s3_config.secret_key,
-            ));
-        };
-        // Don't expose DigitalOcean to customer builds of this CLI... use feature flag?
-        Err(anyhow!("Missing AWS S3 config"))
     }
 }
 
 #[tokio::main]
-pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> Result<String> {
+pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> Result<String> {
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
         r => format!("s3.{}.amazonaws.com", r.name()),
@@ -107,23 +89,8 @@ pub async fn upload_file(data: Vec<u8>, key: String, config: StorageConfig) -> R
 
 // TODO: Use reqwest Url type
 #[tokio::main]
-pub async fn download_file(url: &str) -> Result<()> {
+pub async fn download_file(config: StorageConfig, url: &str) -> Result<()> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
-    let app_config = AppConfig::fetch()?;
-    let config;
-    if url.contains("amazonaws.com") {
-        let s3_config = app_config
-            .aws_s3
-            .ok_or_else(|| anyhow!("Missing DigitalOcean API keys to download: {}", url))?;
-        config = aws_s3::new_config(s3_config.access_key, s3_config.secret_key);
-    } else if url.contains("digitaloceanspaces.com") {
-        let do_config = app_config
-            .digitalocean_spaces
-            .ok_or_else(|| anyhow!("Missing DigitalOcean API keys to download: {}", url))?;
-        config = digitalocean_spaces::new_config(do_config.access_key, do_config.secret_key);
-    } else {
-        return Err(anyhow!("Trying to download from unknown storage provider!"));
-    }
 
     // TODO: store provider, bucket, and key separately in database?
     let key = url
