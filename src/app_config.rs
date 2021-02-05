@@ -61,8 +61,8 @@ impl Default for StorageProviderChoices {
 pub struct CompleteAppConfig {
     pub database: Database,
     #[cfg(feature = "tangram-internal")]
-    pub digitalocean_spaces: Option<DigitalOceanSpaces>,
-    pub aws_s3: Option<AwsS3>,
+    pub digitalocean_spaces: Option<StorageApiKeys>,
+    pub aws_s3: Option<StorageApiKeys>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -78,23 +78,16 @@ pub struct Database {
 #[cfg(feature = "tangram-internal")]
 #[derive(Debug, Deserialize)]
 pub struct DigitalOceanSpacesConfig {
-    pub digitalocean_spaces: DigitalOceanSpaces,
-}
-
-#[cfg(feature = "tangram-internal")]
-#[derive(Debug, Deserialize)]
-pub struct DigitalOceanSpaces {
-    pub access_key: String,
-    pub secret_key: String,
+    pub digitalocean_spaces: StorageApiKeys,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AwsS3Config {
-    pub aws_s3: AwsS3,
+    pub aws_s3: StorageApiKeys,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AwsS3 {
+pub struct StorageApiKeys {
     pub access_key: String,
     pub secret_key: String,
 }
