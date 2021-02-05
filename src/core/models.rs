@@ -9,20 +9,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Dataset {
     /// Note: This is a Primary Key.<pk/>
-    #[serde(rename = "uuid")]
     pub uuid: String,
-    #[serde(rename = "created_date", with = "notz_rfc_3339")]
+    #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    #[serde(rename = "creator_role")]
     pub creator_role: String,
-    #[serde(rename = "access_role")]
     pub access_role: String,
-    #[serde(rename = "url")]
     pub url: String,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
-    #[serde(rename = "metadata")]
     pub metadata: serde_json::Value,
 }
 
