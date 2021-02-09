@@ -4,6 +4,7 @@
 // ----------------------------
 
 use anyhow::Result;
+use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
 use std::path::Path;
@@ -13,8 +14,25 @@ use uuid::Uuid;
 
 use crate::app_config::{DatabaseConfig, StorageProviderChoices};
 use crate::core::api;
+use crate::core::api::datasets::DatasetGetRequest;
 use crate::core::api::storage;
 use crate::core::commands;
+
+/// Extract optional arg with a specific type, exiting on parse error
+pub fn handle_optional_arg<T>(matches: &clap::ArgMatches, arg_name: &str) -> Option<T>
+where
+    T: FromStr,
+    <T as FromStr>::Err: std::fmt::Display,
+{
+    match matches.value_of_t(arg_name) {
+        Ok(val) => Some(val),
+        Err(clap::Error {
+            kind: clap::ErrorKind::ArgumentNotFound,
+            ..
+        }) => None,
+        Err(e) => e.exit(),
+    }
+}
 
 /// Match commands
 pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
@@ -33,8 +51,49 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         Some(("create", _create_matches)) => {
             commands::create_dataset(&api_config)?;
         }
-        Some(("ls", _ls_matches)) => {
-            let datasets = commands::list_datasets(&api_config, None)?;
+        Some(("ls", ls_matches)) => {
+            // For optional arguments, if they're missing (ArgumentNotFound)
+            // treat it as Option::None. Any other error should cause an exit
+            // and error message.
+            let after_date: Option<NaiveDate> = handle_optional_arg(ls_matches, "after_date");
+            let before_date: Option<NaiveDate> = handle_optional_arg(ls_matches, "before_date");
+
+            // Validation to ensure before and after date bounds are sane
+            if let (Some(before), Some(after)) = (before_date, after_date) {
+                if before < after {
+                    clap::Error::with_description(
+                        format!(
+                            "before_date ({}) must be later than the after_date ({})",
+                            before, after
+                        ),
+                        clap::ErrorKind::ValueValidation,
+                    )
+                    .exit();
+                }
+            }
+
+            let creator: Option<String> = handle_optional_arg(ls_matches, "creator");
+
+            // TODO: implement metadata CLI input
+
+            let uuid: Option<Uuid> = handle_optional_arg(ls_matches, "uuid");
+            let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
+            let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
+
+            // TODO: implement order
+            let order: Option<String> = handle_optional_arg(ls_matches, "order");
+
+            let get_params = DatasetGetRequest {
+                uuid,
+                before_date,
+                after_date,
+                creator,
+                order,
+                limit,
+                offset,
+            };
+
+            let datasets = commands::list_datasets(&api_config, &get_params)?;
 
             // TODO: use generic, customizable formatter (e.g. kubernetes get)
             for d in datasets.iter() {
@@ -54,7 +113,11 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_uuid: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
-            let datasets = commands::list_datasets(&api_config, Some(dataset_uuid))?;
+            let get_params = DatasetGetRequest {
+                uuid: Some(dataset_uuid),
+                ..Default::default()
+            };
+            let datasets = commands::list_datasets(&api_config, &get_params)?;
             let dataset = &datasets[0];
             commands::download_file(config, &dataset.url)?;
         }
@@ -87,7 +150,74 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .takes_value(true),
         )
         .subcommand(App::new("create").about("Create a new remote dataset"))
-        .subcommand(App::new("ls").about("List remote datasets"))
+        .subcommand(
+            App::new("ls")
+                .about("List remote datasets")
+                // Using `.args` instead of repeated `.arg` so we can apply a feature flag
+                .args(&[
+                    Arg::new("after_date")
+                        .about("Show datasets created on or after 00:00 UTC of this date (format: YYYY-mm-dd)")
+                        .short('a')
+                        .long("after-date")
+                        .value_name("DATE")
+                        .takes_value(true),
+                    Arg::new("before_date")
+                        .about("Show datasets created before 00:00 UTC of this date (format: YYYY-mm-dd)")
+                        .short('b')
+                        .long("before-date")
+                        .value_name("DATE")
+                        .takes_value(true),
+                    #[cfg(feature = "tangram-internal")]
+                    Arg::new("creator")
+                        .about("Show datasets created by this user")
+                        .short('c')
+                        .long("creator")
+                        .value_name("USERNAME")
+                        .takes_value(true),
+                    Arg::new("metadata")
+                        .about("NOT IMPLEMENTED: Show dataset matching metadata")
+                        .short('m')
+                        .long("metadata")
+                        .value_name("???")
+                        .takes_value(true),
+                    Arg::new("uuid")
+                        .about("Show dataset matching uuid")
+                        .short('u')
+                        .long("uuid")
+                        .value_name("UUID")
+                        .takes_value(true),
+                    // TODO: implement order argument
+                    // TODO: implement order descending
+                    Arg::new("limit")
+                        .about("Show N results (max 100)")
+                        .short('l')
+                        .long("limit")
+                        .value_name("N")
+                        .takes_value(true)
+                        .validator(|val| {
+                            match val.parse::<usize>().map_err(|e| {
+                                clap::Error::with_description(
+                                    format!("{}", e),
+                                    clap::ErrorKind::InvalidValue,
+                                )
+                            })? {
+                                1..=100 => Ok(()),
+                                _ => Err(clap::Error::with_description(
+                                    format!("Limit value must be between 1-100, got ({})", val),
+                                    clap::ErrorKind::InvalidValue,
+                                )),
+                            }
+                        }),
+                    Arg::new("offset")
+                        .about(
+                            "Skip N results (WARNING: Results may shift between subsequent calls)",
+                        )
+                        .short('s')
+                        .long("offset")
+                        .value_name("N")
+                        .takes_value(true),
+                ]),
+        )
         .subcommand(
             App::new("upload")
                 .about("Upload file to remote dataset")

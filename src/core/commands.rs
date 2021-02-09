@@ -11,7 +11,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use super::api;
-use super::api::datasets;
+use super::api::datasets::{self, DatasetGetRequest};
 use super::api::storage;
 use super::api::storage::StorageConfig;
 use super::models::Dataset;
@@ -38,10 +38,11 @@ pub fn create_dataset(config: &api::Configuration) -> Result<()> {
     Ok(())
 }
 
-pub fn list_datasets(config: &api::Configuration, uuid: Option<Uuid>) -> Result<Vec<Dataset>> {
-    let datasets = datasets::datasets_get(
-        config, uuid, None, None, None, None, None, None, None, None, None, None,
-    )?;
+pub fn list_datasets(
+    config: &api::Configuration,
+    params: &DatasetGetRequest,
+) -> Result<Vec<Dataset>> {
+    let datasets = datasets::datasets_get(config, params)?;
 
     Ok(datasets)
 }

@@ -3,11 +3,13 @@
 // Proprietary and confidential
 // ----------------------------
 
-use crate::core::models::Dataset;
 use anyhow::{anyhow, Result};
+use chrono::NaiveDate;
 use reqwest::Url;
 use serde_json::json;
 use uuid::Uuid;
+
+use crate::core::models::Dataset;
 
 pub fn datasets_patch(
     configuration: &super::Configuration,
@@ -51,83 +53,83 @@ pub fn datasets_patch(
         .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
 }
 
+pub struct DatasetGetRequest {
+    pub uuid: Option<Uuid>,
+    pub before_date: Option<NaiveDate>,
+    pub after_date: Option<NaiveDate>,
+    pub creator: Option<String>,
+    // TODO: implement metadata: Option<String>,
+    // TODO: enum of Dataset cols?
+    pub order: Option<String>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+impl Default for DatasetGetRequest {
+    fn default() -> Self {
+        Self {
+            uuid: None,
+            before_date: None,
+            after_date: None,
+            creator: None,
+            order: None,
+            limit: None,
+            offset: None,
+        }
+    }
+}
+
 pub fn datasets_get(
     configuration: &super::Configuration,
-    uuid: Option<Uuid>,
-    created_date: Option<&str>,
-    creator_role: Option<&str>,
-    access_role: Option<&str>,
-    url: Option<&Url>,
-    metadata: Option<&str>,
-    order: Option<&str>,
-    range: Option<&str>,
-    range_unit: Option<&str>,
-    offset: Option<&str>,
-    limit: Option<&str>,
+    params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
     let local_var_client = &configuration.client;
 
     let local_var_uri_str = format!("{}/datasets", configuration.base_path);
-    let mut local_var_req_builder = local_var_client.get(local_var_uri_str.as_str());
+    let mut req_builder = local_var_client.get(local_var_uri_str.as_str());
 
-    if let Some(ref local_var_str) = uuid {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("uuid", format!("eq.{}", &local_var_str.to_string()))]);
+    if let Some(uuid) = &params.uuid {
+        req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid))]);
     }
-    if let Some(ref local_var_str) = created_date {
-        local_var_req_builder = local_var_req_builder
-            .query(&[("created_date", format!("eq.{}", &local_var_str.to_string()))]);
+    if let Some(before_date) = &params.before_date {
+        req_builder = req_builder.query(&[("created_date", format!("lt.{}", before_date))]);
     }
-    if let Some(ref local_var_str) = creator_role {
-        local_var_req_builder = local_var_req_builder
-            .query(&[("creator_role", format!("eq.{}", &local_var_str.to_string()))]);
+    if let Some(after_date) = &params.after_date {
+        req_builder = req_builder.query(&[("created_date", format!("gte.{}", after_date))]);
     }
-    if let Some(ref local_var_str) = access_role {
-        local_var_req_builder = local_var_req_builder
-            .query(&[("access_role", format!("eq.{}", &local_var_str.to_string()))]);
+    if let Some(creator) = &params.creator {
+        req_builder = req_builder.query(&[("creator_role", format!("eq.{}", creator))]);
     }
-    if let Some(ref local_var_str) = url {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("url", format!("eq.{}", &local_var_str.to_string()))]);
+    // TODO: implement metadata
+    // if let Some(metadata) = params.metadata {
+    //     req_builder = req_builder.query(&[("metadata", format!("eq.{}", metadata))]);
+    // }
+
+    // TODO: fix how order is added to query string
+    if let Some(order) = &params.order {
+        req_builder = req_builder.query(&[("order", format!("eq.{}", order))]);
     }
-    if let Some(ref local_var_str) = metadata {
-        local_var_req_builder = local_var_req_builder
-            .query(&[("metadata", format!("eq.{}", &local_var_str.to_string()))]);
+    // TODO: test limit+offset
+    if let Some(limit) = &params.limit {
+        req_builder = req_builder.query(&[("limit", limit)]);
     }
-    if let Some(ref local_var_str) = order {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("order", format!("eq.{}", &local_var_str.to_string()))]);
-    }
-    if let Some(ref local_var_str) = offset {
-        local_var_req_builder = local_var_req_builder
-            .query(&[("offset", format!("eq.{}", &local_var_str.to_string()))]);
-    }
-    if let Some(ref local_var_str) = limit {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("limit", format!("eq.{}", &local_var_str.to_string()))]);
-    }
-    if let Some(local_var_param_value) = range {
-        local_var_req_builder =
-            local_var_req_builder.header("Range", local_var_param_value.to_string());
-    }
-    if let Some(local_var_param_value) = range_unit {
-        local_var_req_builder =
-            local_var_req_builder.header("Range-Unit", local_var_param_value.to_string());
+    if let Some(offset) = &params.offset {
+        req_builder = req_builder.query(&[("offset", offset)]);
     }
 
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         reqwest::header::USER_AGENT,
         configuration.user_agent.clone(),
     );
     // Use JWT for auth
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         "Authorization",
         format!("Bearer {}", configuration.bearer_access_token),
     );
     // Get json of created Dataset in response
-    local_var_req_builder = local_var_req_builder.header("Prefer", "return=representation");
+    req_builder = req_builder.header("Prefer", "return=representation");
 
-    let local_var_req = local_var_req_builder.build()?;
+    let local_var_req = req_builder.build()?;
     let local_var_resp = local_var_client
         .execute(local_var_req)?
         .error_for_status()?;
