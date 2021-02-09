@@ -10,22 +10,19 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::api;
-use super::api::datasets::{self, DatasetGetRequest};
+use super::api::datasets::{self, DatabaseAPIConfig, DatasetGetRequest};
 use super::api::storage;
 use super::api::storage::StorageConfig;
 use super::models::Dataset;
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
-pub fn create_dataset(config: &api::Configuration) -> Result<()> {
+pub fn create_dataset(config: &DatabaseAPIConfig) -> Result<()> {
     // TODO: at first, just create dataset
     // TODO: later, take optional list of files + upload them to storage provider
 
-    // TODO: derive api::Configuration from config::Config
-    // TODO: do it in cli.rs before calling any subcommands? printing out config doesn't require api config though
     let dataset = datasets::datasets_post(
         config,
-        // TODO: create Dataset model to pass in or just json? metadata is only field needed
+        // TODO: create Dataset model to pass in or just json?
         json!({
             "metadata": {"description": "TODO: get from cmdline or prompt"},
             // TODO: remove url -- it will be moved to files table
@@ -39,7 +36,7 @@ pub fn create_dataset(config: &api::Configuration) -> Result<()> {
 }
 
 pub fn list_datasets(
-    config: &api::Configuration,
+    config: &DatabaseAPIConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
     let datasets = datasets::datasets_get(config, params)?;
@@ -47,7 +44,7 @@ pub fn list_datasets(
     Ok(datasets)
 }
 
-pub fn update_dataset(config: &api::Configuration, uuid: Uuid, url: &Url) -> Result<()> {
+pub fn update_dataset(config: &DatabaseAPIConfig, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
     let dataset = datasets::datasets_patch(config, uuid, url)?;

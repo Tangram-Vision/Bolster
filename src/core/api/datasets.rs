@@ -11,46 +11,26 @@ use uuid::Uuid;
 
 use crate::core::models::Dataset;
 
-pub fn datasets_patch(
-    configuration: &super::Configuration,
-    uuid: Uuid,
-    new_url: &Url,
-) -> Result<Dataset> {
-    let client = &configuration.client;
+// TODO: Expose API functions we need to call from elsewhere
+// pub use datasets::{datasets_create, etc...};
 
-    let url = format!("{}/datasets", configuration.base_path);
-    let mut req_builder = client.patch(url.as_str());
+pub struct DatabaseAPIConfig {
+    pub base_path: String,
+    pub user_agent: String,
+    pub client: reqwest::blocking::Client,
+    pub bearer_access_token: String,
+}
 
-    req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
-
-    req_builder = req_builder.header(
-        reqwest::header::USER_AGENT,
-        configuration.user_agent.clone(),
-    );
-    // Use JWT for auth
-    req_builder = req_builder.header(
-        "Authorization",
-        format!("Bearer {}", configuration.bearer_access_token),
-    );
-    // Get json of updated Dataset in response
-    req_builder = req_builder.header("Prefer", "return=representation");
-
-    let req_body = json!({ "url": new_url });
-    req_builder = req_builder.json(&req_body);
-
-    let request = req_builder.build()?;
-    println!("request: {:?}", request);
-    let response = client.execute(request)?;
-
-    println!("status: {}", response.status());
-    let content = response.text()?;
-    println!("response content: {}", content);
-
-    // Move deserialization to response.json call?
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)?;
-    datasets
-        .pop()
-        .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
+impl DatabaseAPIConfig {
+    pub fn new(bearer_access_token: String) -> Self {
+        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
+        Self {
+            base_path: "http://0.0.0.0:3000".to_owned(),
+            client: reqwest::blocking::Client::new(),
+            user_agent,
+            bearer_access_token,
+        }
+    }
 }
 
 // Only allow a single sort key for now
@@ -105,8 +85,50 @@ impl Default for DatasetGetRequest {
     }
 }
 
+pub fn datasets_patch(
+    configuration: &DatabaseAPIConfig,
+    uuid: Uuid,
+    new_url: &Url,
+) -> Result<Dataset> {
+    let client = &configuration.client;
+
+    let url = format!("{}/datasets", configuration.base_path);
+    let mut req_builder = client.patch(url.as_str());
+
+    req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
+
+    req_builder = req_builder.header(
+        reqwest::header::USER_AGENT,
+        configuration.user_agent.clone(),
+    );
+    // Use JWT for auth
+    req_builder = req_builder.header(
+        "Authorization",
+        format!("Bearer {}", configuration.bearer_access_token),
+    );
+    // Get json of updated Dataset in response
+    req_builder = req_builder.header("Prefer", "return=representation");
+
+    let req_body = json!({ "url": new_url });
+    req_builder = req_builder.json(&req_body);
+
+    let request = req_builder.build()?;
+    println!("request: {:?}", request);
+    let response = client.execute(request)?;
+
+    println!("status: {}", response.status());
+    let content = response.text()?;
+    println!("response content: {}", content);
+
+    // Move deserialization to response.json call?
+    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)?;
+    datasets
+        .pop()
+        .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
+}
+
 pub fn datasets_get(
-    configuration: &super::Configuration,
+    configuration: &DatabaseAPIConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
     let client = &configuration.client;
@@ -165,7 +187,7 @@ pub fn datasets_get(
 }
 
 pub fn datasets_post(
-    configuration: &super::Configuration,
+    configuration: &DatabaseAPIConfig,
     request_body: serde_json::Value,
 ) -> Result<Dataset> {
     let client = &configuration.client;
