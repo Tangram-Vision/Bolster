@@ -43,9 +43,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         }
         Some(("upload", upload_matches)) => {
             // Safe to unwrap because arguments are required or have defaults
-            let dataset_uuid: Uuid = upload_matches
-                .value_of_t("dataset_uuid")
-                .unwrap_or_else(|e| e.exit());
+            let dataset_uuid: Uuid = upload_matches.value_of_t_or_exit("dataset_uuid");
             let input_file = upload_matches.value_of("file").unwrap();
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
@@ -55,9 +53,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
-            let dataset_uuid: Uuid = download_matches
-                .value_of_t("dataset_uuid")
-                .unwrap_or_else(|e| e.exit());
+            let dataset_uuid: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
             let datasets = commands::list_datasets(&api_config, Some(dataset_uuid))?;
             let dataset = &datasets[0];
             commands::download_file(config, &dataset.url)?;
