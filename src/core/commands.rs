@@ -100,13 +100,16 @@ mod test {
     #[test]
     fn test_missing_database_jwt() {
         // Initialize configuration
-        let config = config::Config::default();
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[database]\n",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
         let error = config
             .try_into::<DatabaseConfig>()
             .expect_err("Expected error due to missing database jwt");
-        assert_eq!(
-            error.to_string(),
-            "configuration property \"database.jwt\" not found"
-        );
+        assert_eq!(error.to_string(), "missing field `jwt`");
     }
 }
