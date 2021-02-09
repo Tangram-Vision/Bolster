@@ -14,7 +14,7 @@ use uuid::Uuid;
 
 use crate::app_config::{DatabaseConfig, StorageProviderChoices};
 use crate::core::api;
-use crate::core::api::datasets::DatasetGetRequest;
+use crate::core::api::datasets::{DatasetGetRequest, DatasetOrdering};
 use crate::core::api::storage;
 use crate::core::commands;
 
@@ -81,7 +81,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
             // TODO: implement order
-            let order: Option<String> = handle_optional_arg(ls_matches, "order");
+            let order: Option<DatasetOrdering> = handle_optional_arg(ls_matches, "order");
 
             let get_params = DatasetGetRequest {
                 uuid,
@@ -174,6 +174,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("creator")
                         .value_name("USERNAME")
                         .takes_value(true),
+                    // TODO: implement metadata
                     Arg::new("metadata")
                         .about("NOT IMPLEMENTED: Show dataset matching metadata")
                         .short('m')
@@ -186,8 +187,13 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("uuid")
                         .value_name("UUID")
                         .takes_value(true),
-                    // TODO: implement order argument
-                    // TODO: implement order descending
+                    Arg::new("order")
+                        .about("Sort results by field")
+                        .short('o')
+                        .long("order-by")
+                        .value_name("FIELD.DIRECTION")
+                        .possible_values(DatasetOrdering::VARIANTS)
+                        .takes_value(true),
                     Arg::new("limit")
                         .about("Show N results (max 100)")
                         .short('l')

@@ -53,14 +53,40 @@ pub fn datasets_patch(
         .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
 }
 
+// Only allow a single sort key for now
+#[derive(strum_macros::EnumString, strum_macros::EnumVariantNames, strum_macros::Display)]
+pub enum DatasetOrdering {
+    #[strum(serialize = "created_date.asc")]
+    CreatedDateAsc,
+    #[strum(serialize = "created_date.desc")]
+    CreatedDateDesc,
+    #[strum(serialize = "creator.asc")]
+    CreatorAsc,
+    #[strum(serialize = "creator.desc")]
+    CreatorDesc,
+}
+
+impl DatasetOrdering {
+    // For possible dataset ordering options where the CLI name (e.g. "creator")
+    // doesn't match the API/database name (e.g. "creator_role"), translate
+    // between them
+    fn to_database_field(&self) -> String {
+        match self {
+            DatasetOrdering::CreatorAsc => "creator_role.asc".to_owned(),
+            DatasetOrdering::CreatorDesc => "creator_role.desc".to_owned(),
+            other => other.to_string(),
+            // TODO: test order by creator
+        }
+    }
+}
+
 pub struct DatasetGetRequest {
     pub uuid: Option<Uuid>,
     pub before_date: Option<NaiveDate>,
     pub after_date: Option<NaiveDate>,
     pub creator: Option<String>,
     // TODO: implement metadata: Option<String>,
-    // TODO: enum of Dataset cols?
-    pub order: Option<String>,
+    pub order: Option<DatasetOrdering>,
     pub limit: Option<usize>,
     pub offset: Option<usize>,
 }
@@ -105,9 +131,8 @@ pub fn datasets_get(
     //     req_builder = req_builder.query(&[("metadata", format!("eq.{}", metadata))]);
     // }
 
-    // TODO: fix how order is added to query string
     if let Some(order) = &params.order {
-        req_builder = req_builder.query(&[("order", format!("eq.{}", order))]);
+        req_builder = req_builder.query(&[("order", order.to_database_field())]);
     }
     if let Some(limit) = &params.limit {
         req_builder = req_builder.query(&[("limit", limit)]);
