@@ -185,6 +185,8 @@ pub fn datasets_post(
     println!("content: {}", local_var_content);
 
     let mut datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    // PostgREST resturns a list, even when only a single object is expected
+    // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
     datasets
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))

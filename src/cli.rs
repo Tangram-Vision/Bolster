@@ -224,6 +224,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
                 .arg(
                     Arg::new("file")
+                        .about("File to upload to remote dataset")
                         .required(true)
                         .value_name("FILE")
                         .takes_value(true),
