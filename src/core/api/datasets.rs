@@ -14,40 +14,40 @@ use crate::core::models::Dataset;
 pub fn datasets_patch(
     configuration: &super::Configuration,
     uuid: Uuid,
-    url: &Url,
+    new_url: &Url,
 ) -> Result<Dataset> {
-    let local_var_client = &configuration.client;
+    let client = &configuration.client;
 
-    let local_var_uri_str = format!("{}/datasets", configuration.base_path);
-    let mut local_var_req_builder = local_var_client.patch(local_var_uri_str.as_str());
+    let url = format!("{}/datasets", configuration.base_path);
+    let mut req_builder = client.patch(url.as_str());
 
-    local_var_req_builder =
-        local_var_req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
+    req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
 
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         reqwest::header::USER_AGENT,
         configuration.user_agent.clone(),
     );
     // Use JWT for auth
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         "Authorization",
         format!("Bearer {}", configuration.bearer_access_token),
     );
     // Get json of updated Dataset in response
-    local_var_req_builder = local_var_req_builder.header("Prefer", "return=representation");
+    req_builder = req_builder.header("Prefer", "return=representation");
 
-    let req_body = json!({ "url": url });
-    local_var_req_builder = local_var_req_builder.json(&req_body);
+    let req_body = json!({ "url": new_url });
+    req_builder = req_builder.json(&req_body);
 
-    let local_var_req = local_var_req_builder.build()?;
-    println!("request: {:?}", local_var_req);
-    let local_var_resp = local_var_client.execute(local_var_req)?;
+    let request = req_builder.build()?;
+    println!("request: {:?}", request);
+    let response = client.execute(request)?;
 
-    println!("status: {}", local_var_resp.status());
-    let local_var_content = local_var_resp.text()?;
-    println!("response content: {}", local_var_content);
+    println!("status: {}", response.status());
+    let content = response.text()?;
+    println!("response content: {}", content);
 
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    // Move deserialization to response.json call?
+    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)?;
     datasets
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
@@ -83,10 +83,10 @@ pub fn datasets_get(
     configuration: &super::Configuration,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
-    let local_var_client = &configuration.client;
+    let client = &configuration.client;
 
-    let local_var_uri_str = format!("{}/datasets", configuration.base_path);
-    let mut req_builder = local_var_client.get(local_var_uri_str.as_str());
+    let url = format!("{}/datasets", configuration.base_path);
+    let mut req_builder = client.get(url.as_str());
 
     if let Some(uuid) = &params.uuid {
         req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid))]);
@@ -109,7 +109,6 @@ pub fn datasets_get(
     if let Some(order) = &params.order {
         req_builder = req_builder.query(&[("order", format!("eq.{}", order))]);
     }
-    // TODO: test limit+offset
     if let Some(limit) = &params.limit {
         req_builder = req_builder.query(&[("limit", limit)]);
     }
@@ -129,62 +128,50 @@ pub fn datasets_get(
     // Get json of created Dataset in response
     req_builder = req_builder.header("Prefer", "return=representation");
 
-    let local_var_req = req_builder.build()?;
-    let local_var_resp = local_var_client
-        .execute(local_var_req)?
-        .error_for_status()?;
+    let request = req_builder.build()?;
+    let response = client.execute(request)?.error_for_status()?;
 
-    println!("status: {}", local_var_resp.status());
-    let local_var_content = local_var_resp.text()?;
-    println!("content: {}", local_var_content);
+    println!("status: {}", response.status());
+    let content = response.text()?;
+    println!("content: {}", content);
 
-    let datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    let datasets: Vec<Dataset> = serde_json::from_str(&content)?;
     Ok(datasets)
 }
 
 pub fn datasets_post(
     configuration: &super::Configuration,
-    // Select is to pick specific fields to return in response
-    // select: Option<&str>,
     request_body: serde_json::Value,
 ) -> Result<Dataset> {
-    let local_var_client = &configuration.client;
+    let client = &configuration.client;
 
-    let local_var_uri_str = format!("{}/datasets", configuration.base_path);
-    let mut local_var_req_builder = local_var_client.post(local_var_uri_str.as_str());
+    let url = format!("{}/datasets", configuration.base_path);
+    let mut req_builder = client.post(url.as_str());
 
-    /*
-    if let Some(ref local_var_str) = select {
-        local_var_req_builder =
-            local_var_req_builder.query(&[("select", &local_var_str.to_string())]);
-    }
-    */
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         reqwest::header::USER_AGENT,
         configuration.user_agent.clone(),
     );
     // Use JWT for auth
-    local_var_req_builder = local_var_req_builder.header(
+    req_builder = req_builder.header(
         "Authorization",
         format!("Bearer {}", configuration.bearer_access_token),
     );
     // Get json of created Dataset in response
-    local_var_req_builder = local_var_req_builder.header("Prefer", "return=representation");
+    req_builder = req_builder.header("Prefer", "return=representation");
 
     println!("reqbody: {}", request_body);
-    local_var_req_builder = local_var_req_builder.json(&request_body);
+    req_builder = req_builder.json(&request_body);
 
-    let local_var_req = local_var_req_builder.build()?;
-    println!("headers: {:?}", local_var_req.headers());
-    let local_var_resp = local_var_client
-        .execute(local_var_req)?
-        .error_for_status()?;
+    let request = req_builder.build()?;
+    println!("headers: {:?}", request.headers());
+    let response = client.execute(request)?.error_for_status()?;
 
-    println!("status: {}", local_var_resp.status());
-    let local_var_content = local_var_resp.text()?;
-    println!("content: {}", local_var_content);
+    println!("status: {}", response.status());
+    let content = response.text()?;
+    println!("content: {}", content);
 
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&local_var_content)?;
+    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)?;
     // PostgREST resturns a list, even when only a single object is expected
     // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
     datasets
