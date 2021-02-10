@@ -10,13 +10,13 @@ use std::fs;
 use std::path::Path;
 use uuid::Uuid;
 
-use super::api::datasets::{self, DatabaseAPIConfig, DatasetGetRequest};
+use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
 use super::api::storage;
 use super::api::storage::StorageConfig;
 use super::models::Dataset;
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
-pub fn create_dataset(config: &DatabaseAPIConfig) -> Result<()> {
+pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
     // TODO: at first, just create dataset
     // TODO: later, take optional list of files + upload them to storage provider
 
@@ -34,7 +34,7 @@ pub fn create_dataset(config: &DatabaseAPIConfig) -> Result<()> {
 }
 
 pub fn list_datasets(
-    config: &DatabaseAPIConfig,
+    config: &DatabaseApiConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
     let datasets = datasets::datasets_get(config, params)?;
@@ -42,7 +42,7 @@ pub fn list_datasets(
     Ok(datasets)
 }
 
-pub fn update_dataset(config: &DatabaseAPIConfig, uuid: Uuid, url: &Url) -> Result<()> {
+pub fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
     datasets::datasets_patch(config, uuid, url)?;

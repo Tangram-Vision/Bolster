@@ -14,12 +14,12 @@ use uuid::Uuid;
 
 use crate::core::models::Dataset;
 
-pub struct DatabaseAPIConfig {
+pub struct DatabaseApiConfig {
     pub base_url: String,
     pub client: reqwest::blocking::Client,
 }
 
-impl DatabaseAPIConfig {
+impl DatabaseApiConfig {
     pub fn new_with_params(
         bearer_access_token: String,
         base_url: String,
@@ -106,7 +106,7 @@ impl Default for DatasetGetRequest {
 }
 
 pub fn datasets_patch(
-    configuration: &DatabaseAPIConfig,
+    configuration: &DatabaseApiConfig,
     uuid: Uuid,
     new_url: &Url,
 ) -> Result<Dataset> {
@@ -136,7 +136,7 @@ pub fn datasets_patch(
 }
 
 pub fn datasets_get(
-    configuration: &DatabaseAPIConfig,
+    configuration: &DatabaseApiConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
     debug!("building get request for: {:?}", params);
@@ -185,7 +185,7 @@ pub fn datasets_get(
 }
 
 pub fn datasets_post(
-    configuration: &DatabaseAPIConfig,
+    configuration: &DatabaseApiConfig,
     request_body: serde_json::Value,
 ) -> Result<Dataset> {
     debug!("building post request for: {:?}", request_body);
@@ -241,7 +241,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
                 .unwrap();
         let params = DatasetGetRequest::default();
 
@@ -276,7 +276,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
                 .unwrap();
         let params = DatasetGetRequest {
             after_date: Some(NaiveDate::from_str("2021-01-01").unwrap()),
@@ -313,7 +313,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
                 .unwrap();
         let params = DatasetGetRequest::default();
 
@@ -341,7 +341,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
                 .unwrap();
         let params = DatasetGetRequest::default();
 
@@ -368,7 +368,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
                 .unwrap();
         let params = DatasetGetRequest::default();
 
@@ -401,7 +401,7 @@ mod tests {
         });
 
         let config =
-            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 1)
+            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 1)
                 .unwrap();
         let params = DatasetGetRequest::default();
 
