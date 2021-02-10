@@ -4,7 +4,49 @@ version = "0.1.0"
 authors = ["Greg Schafer <greg.schafer@tangramvision.com>"]
 edition = "2018"
 publish = false
+repository = "https://gitlab.com/tangram-vision/bolster"
+readme = "README.md"
+description = """
+CLI tool for managing Tangram datasets, including upload/download and search/sort/filter.
+"""
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+# Determines whether to enable upload/download from DigitalOcean Spaces.
+# External users can only use AWS S3 (because we have better control over
+# permissions with S3).
+tangram-internal = []
 
 [dependencies]
+anyhow = "1.0"
+better-panic = "0.2"
+chrono = "0.4"
+# Using clap beta because it's pretty stable and makes many breaking changes,
+# we might as well be forward-looking with dependencies since bolster is a
+# binary crate.
+# https://github.com/clap-rs/clap/blob/master/CHANGELOG.md#v300-beta2-2020-09-18
+clap = "3.0.0-beta.2"
+config = "0.10"
+env_logger = "0.8.2"
+human-panic = "1.0"
+lazy_static = "1.4"
+log = "0.4"
+rand = "0.7"
+rusoto_core = "0.46"
+rusoto_credential = "0.46"
+rusoto_s3 = "0.46"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"]}
+strum = "0.20"
+strum_macros = "0.20"
+tokio = { version = "1.1", features = ["fs"]}
+toml = "0.5"
+url = { version = "2.2", features = ["serde"]}
+uuid = "0.8"
+
+[dependencies.reqwest]
+version = "^0.10"
+default-features = false
+features = ["json", "blocking"]
+
+[dev-dependencies]
+assert_cmd = "1.0"

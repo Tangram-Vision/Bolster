@@ -1,0 +1,10 @@
+[database]
+jwt = "abc"
+
+[digitalocean_spaces]
+access_key = "abc"
+secret_key = "def"
+
+[aws_s3]
+access_key = "abc"
+secret_key = "def"

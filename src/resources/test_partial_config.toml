@@ -1,0 +1,6 @@
+[database]
+jwt = "abc"
+
+[aws_s3]
+access_key = "abc"
+secret_key = "def"

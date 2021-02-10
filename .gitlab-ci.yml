@@ -5,7 +5,7 @@
 #       `image: 'registry.gitlab.com/tangram-vision/docker-base'`.
 #       If this is the case, make sure to include SSH loading in
 #       `before_script`
-image: 'registry.gitlab.com/tangram-vision/docker-base:latest'
+image: "registry.gitlab.com/tangram-vision/docker-base:latest"
 
 stages:
   - test
@@ -18,7 +18,7 @@ before_script:
   - CARGO_HOME=/usr/local/cargo rustup update
   # Load SSH key we can use to pull internal dependencies
   # From: https://docs.gitlab.com/ce/ci/ssh_keys/README.html
-  - 'which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )'
+  - "which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )"
   - eval $(ssh-agent -s)
   - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
 
@@ -39,7 +39,6 @@ cache:
   # The build_cache job populates the cache.
   policy: pull
   paths: *cache_paths
-
 
 ##### ########## ########## ########## ########## #####
 # TEST STAGE
@@ -136,4 +135,3 @@ build_badges:
     expire_in: 4 weeks
   only:
     - main
-
