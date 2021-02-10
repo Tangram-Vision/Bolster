@@ -95,6 +95,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             let datasets = commands::list_datasets(&db_config, &get_params)?;
 
             // TODO: use generic, customizable formatter (e.g. kubernetes get)
+            // TODO: show creator for tangram-internal build
             for d in datasets.iter() {
                 println!("{} {} {}", d.uuid, d.created_date, d.url);
             }

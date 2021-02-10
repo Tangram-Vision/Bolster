@@ -92,7 +92,6 @@ pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> R
     Ok(url)
 }
 
-// TODO: Use reqwest Url type
 #[tokio::main]
 pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
