@@ -5,9 +5,11 @@
 
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
+use log::debug;
 use reqwest::{header, Url};
 use serde_json::json;
 use std::time::Duration;
+use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
 use crate::core::models::Dataset;
@@ -51,7 +53,7 @@ impl DatabaseAPIConfig {
 }
 
 // Only allow a single sort key for now
-#[derive(strum_macros::EnumString, strum_macros::EnumVariantNames, strum_macros::Display)]
+#[derive(EnumString, EnumVariantNames, Display, Debug)]
 pub enum DatasetOrdering {
     #[strum(serialize = "created_date.asc")]
     CreatedDateAsc,
@@ -77,6 +79,7 @@ impl DatasetOrdering {
     }
 }
 
+#[derive(Debug)]
 pub struct DatasetGetRequest {
     pub uuid: Option<Uuid>,
     pub before_date: Option<NaiveDate>,
@@ -107,6 +110,7 @@ pub fn datasets_patch(
     uuid: Uuid,
     new_url: &Url,
 ) -> Result<Dataset> {
+    debug!("building patch request for: {}", uuid);
     let client = &configuration.client;
 
     let url = format!("{}/datasets", configuration.base_url);
@@ -118,12 +122,11 @@ pub fn datasets_patch(
     req_builder = req_builder.json(&req_body);
 
     let request = req_builder.build()?;
-    println!("request: {:?}", request);
     let response = client.execute(request)?.error_for_status()?;
 
-    println!("status: {}", response.status());
+    debug!("status: {}", response.status());
     let content = response.text()?;
-    println!("response content: {}", content);
+    debug!("response content: {}", content);
 
     let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
@@ -136,6 +139,7 @@ pub fn datasets_get(
     configuration: &DatabaseAPIConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
+    debug!("building get request for: {:?}", params);
     let client = &configuration.client;
 
     let url = format!("{}/datasets", configuration.base_url);
@@ -171,9 +175,9 @@ pub fn datasets_get(
     let request = req_builder.build()?;
     let response = client.execute(request)?.error_for_status()?;
 
-    println!("status: {}", response.status());
+    debug!("status: {}", response.status());
     let content = response.text()?;
-    println!("content: {}", content);
+    debug!("content: {}", content);
 
     let datasets: Vec<Dataset> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
@@ -184,21 +188,20 @@ pub fn datasets_post(
     configuration: &DatabaseAPIConfig,
     request_body: serde_json::Value,
 ) -> Result<Dataset> {
+    debug!("building post request for: {:?}", request_body);
     let client = &configuration.client;
 
     let url = format!("{}/datasets", configuration.base_url);
     let mut req_builder = client.post(url.as_str());
 
-    println!("reqbody: {}", request_body);
     req_builder = req_builder.json(&request_body);
 
     let request = req_builder.build()?;
-    println!("headers: {:?}", request.headers());
     let response = client.execute(request)?.error_for_status()?;
 
-    println!("status: {}", response.status());
+    debug!("status: {}", response.status());
     let content = response.text()?;
-    println!("content: {}", content);
+    debug!("content: {}", content);
 
     // TODO: save json to file and prompt user to send it to us?
     let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
