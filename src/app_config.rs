@@ -113,6 +113,7 @@ mod tests {
             error
                 .to_string()
                 .contains("Trying to download from unknown storage provider:"),
+            "{}",
             error.to_string()
         );
     }
@@ -125,6 +126,7 @@ mod tests {
             error
                 .to_string()
                 .contains("Storage provider url doesn't contain a domain:"),
+            "{}",
             error.to_string()
         );
     }
@@ -139,6 +141,7 @@ mod tests {
             error
                 .to_string()
                 .contains("Trying to download from unknown storage provider:"),
+            "{}",
             error.to_string()
         );
     }

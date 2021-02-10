@@ -106,6 +106,7 @@ mod tests {
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
+            "{}",
             error.to_string()
         );
     }
@@ -127,6 +128,7 @@ mod tests {
             upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Filename is invalid UTF8"),
+            "{}",
             error.to_string()
         );
     }
@@ -148,6 +150,7 @@ mod tests {
             upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Invalid filename"),
+            "{}",
             error.to_string()
         );
     }
@@ -165,6 +168,7 @@ mod tests {
         let error = print_config(config).expect_err("Unexpected config format should error");
         assert!(
             error.to_string().contains("missing field"),
+            "{}",
             error.to_string()
         );
     }
@@ -184,6 +188,7 @@ mod tests {
         let error = download_file(config, &url).expect_err("Missing storage config should error");
         assert!(
             error.to_string().contains("missing field"),
+            "{}",
             error.to_string()
         );
     }
