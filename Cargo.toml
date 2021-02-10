@@ -51,3 +51,4 @@ features = ["json", "blocking"]
 [dev-dependencies]
 assert_cmd = "1.0"
 httpmock = "0.5"
+predicates = "1.0"

@@ -214,12 +214,10 @@ pub fn datasets_post(
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
     use super::*;
-    use chrono::NaiveDate;
     use httpmock::Method::GET;
     use httpmock::MockServer;
-    use serde_json::json;
     use std::str::FromStr;
 
     #[test]

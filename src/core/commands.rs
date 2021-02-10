@@ -50,20 +50,17 @@ pub fn update_dataset(config: &DatabaseAPIConfig, uuid: Uuid, url: &Url) -> Resu
 }
 
 pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url> {
-    // TODO: write a test for when file doesn't exist
-
-    // TODO: change to
-    // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
-    // of BufRead trait to handle big files
-    let contents = fs::read(path)?;
-
-    // TODO: test these error cases
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
     let key = format!("{}/{}", uuid, key);
+
+    // TODO: change to
+    // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
+    // of BufRead trait to handle big files
+    let contents = fs::read(path)?;
 
     let url = storage::upload_file(config, contents, key)?;
     Ok(url)
@@ -87,22 +84,107 @@ pub fn print_config(config: config::Config) -> Result<()> {
 }
 
 #[cfg(test)]
-mod test {
-    use crate::app_config::DatabaseConfig;
+mod tests {
+    use super::*;
+    use std::ffi;
+    use std::os::unix::ffi::OsStrExt;
 
     #[test]
-    fn test_missing_database_jwt() {
-        // Initialize configuration
+    fn test_upload_missing_file() {
         let mut config = config::Config::default();
         config
             .merge(config::File::from_str(
-                "[database]\n",
+                include_str!("../resources/test_full_config.toml"),
                 config::FileFormat::Toml,
             ))
             .unwrap();
-        let error = config
-            .try_into::<DatabaseConfig>()
-            .expect_err("Expected error due to missing database jwt");
-        assert_eq!(error.to_string(), "missing field `jwt`");
+
+        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
+        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let path = Path::new("nonexistent-file");
+        let error = upload_file(storage_config, uuid, path)
+            .expect_err("Loading nonexistent file should fail");
+        assert!(
+            error.to_string().contains("No such file or directory"),
+            error.to_string()
+        );
+    }
+
+    #[test]
+    fn test_upload_invalid_filename_utf8() {
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                include_str!("../resources/test_full_config.toml"),
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+
+        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
+        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let path = Path::new(ffi::OsStr::from_bytes(&[128u8]));
+        let error =
+            upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
+        assert!(
+            error.to_string().contains("Filename is invalid UTF8"),
+            error.to_string()
+        );
+    }
+
+    #[test]
+    fn test_upload_invalid_filename() {
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                include_str!("../resources/test_full_config.toml"),
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+
+        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
+        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let path = Path::new("/");
+        let error =
+            upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
+        assert!(
+            error.to_string().contains("Invalid filename"),
+            error.to_string()
+        );
+    }
+
+    #[test]
+    fn test_printing_bogus_config() {
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[bad_header]\nbad_key = \"bad value\"",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+
+        let error = print_config(config).expect_err("Unexpected config format should error");
+        assert!(
+            error.to_string().contains("missing field"),
+            error.to_string()
+        );
+    }
+
+    #[test]
+    fn test_bad_storage_config() {
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[blah]\naccess_key = \"whatever\"",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+
+        let url_str = "https://tangram-datasets.s3.us-east-2.amazonaws.com/test";
+        let url = Url::parse(&url_str).unwrap();
+        let error = download_file(config, &url).expect_err("Missing storage config should error");
+        assert!(
+            error.to_string().contains("missing field"),
+            error.to_string()
+        );
     }
 }

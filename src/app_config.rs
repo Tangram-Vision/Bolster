@@ -6,10 +6,11 @@
 use anyhow::{anyhow, Result};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
+use std::cmp;
 use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 
 // TODO: should this be "UploadStorageProviderChoices"?
-#[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter)]
+#[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, cmp::PartialEq)]
 pub enum StorageProviderChoices {
     #[cfg(feature = "tangram-internal")]
     #[strum(serialize = "digitalocean")]
@@ -40,7 +41,10 @@ impl StorageProviderChoices {
                 Ok(StorageProviderChoices::DigitalOcean)
             }
 
-            _ => Err(anyhow!("Trying to download from unknown storage provider!")),
+            _ => Err(anyhow!(
+                "Trying to download from unknown storage provider: {}",
+                url
+            )),
         }
     }
 }
@@ -98,94 +102,59 @@ pub struct StorageApiKeys {
 
 #[cfg(test)]
 mod tests {
-    //use super::DatabaseConfig;
-    // TODO: test full and partial configs
+    use super::*;
+    use std::str::FromStr;
 
-    /*
     #[test]
-    fn fetch_full_config() {
-        // Initialize configuration
-        let config_contents = include_str!("resources/test_full_config.toml");
-        AppConfig::init(Some(config_contents)).unwrap();
-
-        // Fetch an instance of Config
-        let config = AppConfig::fetch().unwrap();
-
-        // Check the values
-        assert_eq!(config.database.jwt, "abc");
-        assert_eq!(
-            config.digitalocean_spaces.as_ref().unwrap().access_key,
-            "abc"
+    fn test_bad_url_to_provider_enum() {
+        let error = StorageProviderChoices::from_url(&Url::from_str("http://example.com").unwrap())
+            .expect_err("Url shouldn't be recognized as a storage provider url");
+        assert!(
+            error
+                .to_string()
+                .contains("Trying to download from unknown storage provider:"),
+            error.to_string()
         );
-        assert_eq!(
-            config.digitalocean_spaces.as_ref().unwrap().secret_key,
-            "def"
+    }
+
+    #[test]
+    fn test_ip_addr_url_to_provider_enum() {
+        let error = StorageProviderChoices::from_url(&Url::from_str("http://127.0.0.1").unwrap())
+            .expect_err("Url shouldn't be recognized as a storage provider url");
+        assert!(
+            error
+                .to_string()
+                .contains("Storage provider url doesn't contain a domain:"),
+            error.to_string()
         );
-        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
-        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
     }
 
     #[test]
-    fn fetch_partial_config() {
-        // Initialize configuration
-        let config_contents = include_str!("resources/test_partial_config.toml");
-        AppConfig::init(Some(config_contents)).unwrap();
-
-        // Fetch an instance of Config
-        let config = AppConfig::fetch().unwrap();
-
-        // Check the values
-        assert_eq!(config.database.jwt, "abc");
-        assert!(config.digitalocean_spaces.as_ref().is_none());
-        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
-        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "def");
+    fn test_digitalocean_provider_unavailable() {
+        let error = StorageProviderChoices::from_url(
+            &Url::from_str("https://digitaloceanspaces.com/bucket/key").unwrap(),
+        )
+        .expect_err("Url shouldn't be recognized as a storage provider url");
+        assert!(
+            error
+                .to_string()
+                .contains("Trying to download from unknown storage provider:"),
+            error.to_string()
+        );
     }
+}
 
-    // Can't test overriding with environment variables because they're set at
-    // the process level and mess up other tests.
-    #[test]
-    fn env_var_override() {
-        // Initialize configuration
-        let config_contents = include_str!("../resources/test_partial_config.toml");
-        println!("env_var_override {}", config_contents);
-        env::set_var("BOLSTER_AWS_S3__SECRET_KEY", "so secret");
-        AppConfig::init(Some(config_contents)).unwrap();
-
-        // Fetch an instance of Config
-        let config = AppConfig::fetch().unwrap();
-
-        // Check the values
-        assert_eq!(config.database.as_ref().unwrap().jwt, "abc");
-        assert!(config.digitalocean_spaces.as_ref().is_none());
-        assert_eq!(config.aws_s3.as_ref().unwrap().access_key, "abc");
-        assert_eq!(config.aws_s3.as_ref().unwrap().secret_key, "so secret");
-        env::remove_var("BOLSTER_AWS_S3__SECRET_KEY");
-    }
+#[cfg(all(test, feature = "tangram-internal"))]
+mod tests_internal {
+    use super::*;
+    use std::str::FromStr;
 
     #[test]
-    fn verify_get() {
-        // Initialize configuration
-        let config_contents = include_str!("resources/test_full_config.toml");
-        AppConfig::init(Some(config_contents)).as_ref().unwrap();
-
-        // Check value with get
-        assert_eq!(AppConfig::get::<String>("database.jwt").unwrap(), "abc");
+    fn test_digitalocean_provider_available() {
+        let val = StorageProviderChoices::from_url(
+            &Url::from_str("https://digitaloceanspaces.com/bucket/key").unwrap(),
+        )
+        .expect("Url should be recognized");
+        assert_eq!(val, StorageProviderChoices::DigitalOcean);
     }
-
-    #[test]
-    fn verify_set() {
-        // Initialize configuration
-        let config_contents = include_str!("resources/test_full_config.toml");
-        AppConfig::init(Some(config_contents)).unwrap();
-
-        // Set a field
-        AppConfig::set("database.jwt", "new jwt").unwrap();
-
-        // Fetch a new instance of Config
-        let config = AppConfig::fetch().unwrap();
-
-        // Check value was modified
-        assert_eq!(config.database.jwt, "new jwt");
-    }
-    */
 }

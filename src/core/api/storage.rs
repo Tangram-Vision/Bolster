@@ -125,3 +125,47 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
     io::copy(&mut body, &mut file).await?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use httpmock::Method::GET;
+    use httpmock::MockServer;
+
+    #[test]
+    fn test_download_file_403_forbidden() {
+        // To debug what rusoto and httpmock are doing, enable logger and run
+        // tests with debug or trace level.
+        // let _ = env_logger::try_init();
+
+        let bucket = "tangram-test".to_owned();
+        let key = "test-file";
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET).path(format!("/{}/{}", bucket, key));
+            then.status(403).body("AccessDenied");
+            // Rusoto doesn't seem to parse the error xml anyway, so just use the simpler response body
+            // .body(r#"<?xml version="1.0" encoding="UTF-8"?><Error><Code>AccessDenied</Code><BucketName>tangs-stage</BucketName><RequestId>tx00000000000001970993c-0060245383-5ed52e8-sfo2a</RequestId><HostId>5ed52e8-sfo2a-sfo</HostId></Error>"#);
+        });
+        let test_region = Region::Custom {
+            name: "test".to_owned(),
+            endpoint: server.base_url(),
+        };
+        let url_str = format!("{}/{}", server.base_url(), key);
+        let url = Url::parse(&url_str).unwrap();
+
+        let config = StorageConfig {
+            credentials: StaticProvider::new_minimal("abc".to_owned(), "def".to_owned()),
+            region: test_region,
+            bucket,
+        };
+
+        let error = download_file(config, &url).expect_err("403 Forbidden response expected");
+        match error.downcast_ref::<rusoto_core::RusotoError<rusoto_s3::GetObjectError>>() {
+            Some(rusoto_core::RusotoError::Unknown(b)) => assert_eq!(b.status, 403),
+            e => panic!("Unexpected error: {:?}", e),
+        }
+
+        mock.assert();
+    }
+}

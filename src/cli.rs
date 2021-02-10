@@ -259,3 +259,27 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
 
     Ok(cli_matches)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_database_jwt() {
+        // Initialize configuration
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[database]\n",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+        let error = cli_match(config, clap::ArgMatches::default())
+            .expect_err("Expected error due to missing database jwt");
+        assert_eq!(error.to_string(), "missing field `jwt`");
+    }
+
+    // Other CLI-related tests are in tests/test_cli.rs and act as integration
+    // tests (running the whole bolster binary) so they can properly test the
+    // ClapError.exit functionality when CLI args are malformed.
+}
