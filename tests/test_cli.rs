@@ -128,7 +128,7 @@ mod tests_internal {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "HTTP status client error (401 Unauthorized) for url",
+                "error trying to connect: tcp connect error: Connection refused",
             ));
     }
 
