@@ -6,6 +6,7 @@
 // TODO: extract common code between aws/digitalocean
 
 use anyhow::{anyhow, Result};
+use log::debug;
 use reqwest::Url;
 use rusoto_core::{request, Region};
 use rusoto_credential::StaticProvider;
@@ -79,13 +80,14 @@ pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> R
         key,
         ..Default::default()
     };
+    debug!("making upload_file request {:?}", req);
     // just spawn tokio here and use it, instead of async-ing everything yet
     // TODO: use example https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
     // TODO: another reference https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
 
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
-    println!("response {:?}", resp);
+    debug!("upload_file response {:?}", resp);
     // TODO: get version_id and store to database
     Ok(url)
 }
@@ -113,10 +115,11 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
         key: key.to_owned(),
         ..Default::default()
     };
+    debug!("making download_file request {:?}", req);
 
-    println!("request {:?}", req);
     let resp = client.get_object(req).await?;
-    println!("response {:?}", resp);
+    debug!("download_file response {:?}", resp);
+
     let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
     let mut body = body.into_async_read();
     let mut file = File::create(filename).await?;

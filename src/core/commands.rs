@@ -29,9 +29,7 @@ pub fn create_dataset(config: &DatabaseAPIConfig) -> Result<()> {
             "url": "http://example.com",
         }),
     )?;
-    // TODO: handle request error
-    println!("{:?}", dataset);
-    // TODO: display output (new dataset's uuid)
+    println!("Created new dataset with UUID: {}", dataset.uuid);
     Ok(())
 }
 
@@ -47,10 +45,7 @@ pub fn list_datasets(
 pub fn update_dataset(config: &DatabaseAPIConfig, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
-    let dataset = datasets::datasets_patch(config, uuid, url)?;
-    // TODO: handle request error
-    println!("{:?}", dataset);
-    // TODO: display output (new dataset's uuid)
+    datasets::datasets_patch(config, uuid, url)?;
     Ok(())
 }
 
