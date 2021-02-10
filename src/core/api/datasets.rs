@@ -5,47 +5,48 @@
 
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
-use reqwest::Url;
+use reqwest::{header, Url};
 use serde_json::json;
-use uuid::Uuid;
-
-#[cfg(test)]
 use std::time::Duration;
+use uuid::Uuid;
 
 use crate::core::models::Dataset;
 
-// TODO: Expose API functions we need to call from elsewhere
-// pub use datasets::{datasets_create, etc...};
-
 pub struct DatabaseAPIConfig {
     pub base_url: String,
-    pub user_agent: String,
     pub client: reqwest::blocking::Client,
-    pub bearer_access_token: String,
 }
 
 impl DatabaseAPIConfig {
-    pub fn new(bearer_access_token: String) -> Self {
+    pub fn new_with_params(
+        bearer_access_token: String,
+        base_url: String,
+        timeout: u64,
+    ) -> Result<Self> {
         let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
-        Self {
-            client: reqwest::blocking::Client::new(),
-            base_url: "http://0.0.0.0:3000".to_owned(),
-            user_agent,
-            bearer_access_token,
-        }
-    }
-    #[cfg(test)]
-    pub fn new_test(base_url: String, bearer_access_token: String, timeout: u64) -> Self {
-        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
-        Self {
+        let mut headers = header::HeaderMap::new();
+        headers.insert(
+            header::AUTHORIZATION,
+            header::HeaderValue::from_str(&format!("Bearer {}", bearer_access_token))?,
+        );
+        headers.insert(
+            "Prefer",
+            header::HeaderValue::from_str("return=representation")?,
+        );
+        Ok(Self {
             client: reqwest::blocking::Client::builder()
+                .user_agent(user_agent)
+                .default_headers(headers)
                 .timeout(Duration::from_secs(timeout))
-                .build()
-                .unwrap(),
+                .build()?,
             base_url,
-            user_agent,
-            bearer_access_token,
-        }
+        })
+    }
+
+    pub fn new(bearer_access_token: String) -> Result<Self> {
+        let base_url = "http://0.0.0.0:3000".to_owned();
+        let timeout = 30;
+        Self::new_with_params(bearer_access_token, base_url, timeout)
     }
 }
 
@@ -113,24 +114,11 @@ pub fn datasets_patch(
 
     req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
 
-    req_builder = req_builder.header(
-        reqwest::header::USER_AGENT,
-        configuration.user_agent.clone(),
-    );
-    // Use JWT for auth
-    req_builder = req_builder.header(
-        "Authorization",
-        format!("Bearer {}", configuration.bearer_access_token),
-    );
-    // Get json of updated Dataset in response
-    req_builder = req_builder.header("Prefer", "return=representation");
-
     let req_body = json!({ "url": new_url });
     req_builder = req_builder.json(&req_body);
 
     let request = req_builder.build()?;
     println!("request: {:?}", request);
-    // Separate request, body-processing, and json deserialization error-handling
     let response = client.execute(request)?.error_for_status()?;
 
     println!("status: {}", response.status());
@@ -180,18 +168,6 @@ pub fn datasets_get(
         req_builder = req_builder.query(&[("offset", offset)]);
     }
 
-    req_builder = req_builder.header(
-        reqwest::header::USER_AGENT,
-        configuration.user_agent.clone(),
-    );
-    // Use JWT for auth
-    req_builder = req_builder.header(
-        "Authorization",
-        format!("Bearer {}", configuration.bearer_access_token),
-    );
-    // Get json of created Dataset in response
-    req_builder = req_builder.header("Prefer", "return=representation");
-
     let request = req_builder.build()?;
     let response = client.execute(request)?.error_for_status()?;
 
@@ -212,18 +188,6 @@ pub fn datasets_post(
 
     let url = format!("{}/datasets", configuration.base_url);
     let mut req_builder = client.post(url.as_str());
-
-    req_builder = req_builder.header(
-        reqwest::header::USER_AGENT,
-        configuration.user_agent.clone(),
-    );
-    // Use JWT for auth
-    req_builder = req_builder.header(
-        "Authorization",
-        format!("Bearer {}", configuration.bearer_access_token),
-    );
-    // Get json of created Dataset in response
-    req_builder = req_builder.header("Prefer", "return=representation");
 
     println!("reqbody: {}", request_body);
     req_builder = req_builder.json(&request_body);
@@ -275,7 +239,9 @@ mod test {
                 }]));
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 10);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+                .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).unwrap();
@@ -308,7 +274,9 @@ mod test {
                 }]));
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 10);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+                .unwrap();
         let params = DatasetGetRequest {
             after_date: Some(NaiveDate::from_str("2021-01-01").unwrap()),
             order: Some(DatasetOrdering::CreatorDesc),
@@ -343,7 +311,9 @@ mod test {
                 }));
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 10);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+                .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -369,7 +339,9 @@ mod test {
                 .body("this isn't actually json");
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 10);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+                .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -394,7 +366,9 @@ mod test {
                 .json_body(json!({"message": "JWSError JWSInvalidSignature"}));
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 10);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
+                .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected status code error");
@@ -425,7 +399,9 @@ mod test {
                 .body("Should never see this due to timeout");
         });
 
-        let config = DatabaseAPIConfig::new_test(server.base_url(), "TEST-TOKEN".to_owned(), 1);
+        let config =
+            DatabaseAPIConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 1)
+                .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected timeout error");

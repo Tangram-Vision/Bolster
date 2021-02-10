@@ -43,7 +43,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
 
     // Derive config needed for all commands (they all interact with the database)
     let jwt = config.clone().try_into::<DatabaseConfig>()?.database.jwt;
-    let db_config = DatabaseAPIConfig::new(jwt);
+    let db_config = DatabaseAPIConfig::new(jwt)?;
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
