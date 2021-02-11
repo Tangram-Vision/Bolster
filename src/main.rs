@@ -14,6 +14,9 @@ use anyhow::Result;
 
 fn main() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.
+    //
+    // Example of what panic message looks like:
+    // https://docs.rs/human-panic/1.0.3/human_panic/
     #[cfg(not(debug_assertions))]
     {
         setup_panic!();
