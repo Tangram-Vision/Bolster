@@ -198,6 +198,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .about("Show N results (max 100)")
                         .short('l')
                         .long("limit")
+                        .default_value("20")
                         .value_name("N")
                         .takes_value(true)
                         .validator(|val| {
