@@ -25,8 +25,6 @@ pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
         // TODO: create Dataset model to pass in or just json?
         json!({
             "metadata": {"description": "TODO: get from cmdline or prompt"},
-            // TODO: remove url -- it will be moved to files table
-            "url": "http://example.com",
         }),
     )?;
     println!("Created new dataset with UUID: {}", dataset.uuid);

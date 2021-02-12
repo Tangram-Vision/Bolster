@@ -5,20 +5,36 @@
 
 use chrono::{DateTime, Utc};
 use reqwest::Url;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use std::vec::Vec;
+use uuid::Uuid;
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Dataset {
     /// Note: This is a Primary Key.<pk/>
-    pub uuid: String,
+    pub uuid: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
     pub creator_role: String,
     pub access_role: String,
-    pub url: Url,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
+    pub metadata: serde_json::Value,
+    pub files: Vec<UploadedFile>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub struct UploadedFile {
+    pub uuid: Uuid,
+    #[serde(with = "notz_rfc_3339")]
+    pub created_date: DateTime<Utc>,
+    // Not needed in CLI, exists in database for record-keeping
+    // pub creator_role: String,
+    pub url: Url,
+    pub filesize: u64,
+    // Likely unused, requesting the url w/o version downloads the latest version
+    pub version: String,
     pub metadata: serde_json::Value,
 }
 
