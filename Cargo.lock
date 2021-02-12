@@ -373,6 +373,7 @@ dependencies = [
  "rusoto_s3",
  "serde 1.0.123",
  "serde_json",
+ "shellexpand",
  "strum",
  "strum_macros",
  "tokio 1.1.1",
@@ -2389,6 +2390,15 @@ dependencies = [
  "cpuid-bool",
  "digest",
  "opaque-debug",
+]
+
+[[package]]
+name = "shellexpand"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83bdb7831b2d85ddf4a7b148aa19d0587eddbe8671a436b7bd1182eaad0f2829"
+dependencies = [
+ "dirs-next",
 ]
 
 [[package]]

@@ -45,9 +45,9 @@ fn main() -> Result<()> {
     if let Some(config_file) = cli_matches.value_of("config") {
         settings.merge(config::File::with_name(config_file))?;
     } else {
-        settings.merge(config::File::with_name(
+        settings.merge(config::File::with_name(&shellexpand::tilde(
             "~/.config/tangramvision/bolster.toml",
-        ))?;
+        )))?;
     }
 
     // Override with environment variables, if present
