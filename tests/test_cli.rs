@@ -4,8 +4,10 @@
 // ----------------------------
 
 use assert_cmd::prelude::*;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use predicates::prelude::*;
-
+use serde_json::json;
 use std::process::Command;
 
 #[cfg(test)]
@@ -114,23 +116,34 @@ mod tests {
 mod tests_internal {
     use super::*;
 
-    #[cfg(feature = "tangram-internal")]
     #[test]
     fn test_cli_filtering_by_creator_available() {
-        // WARNING: You must not be running the local server for this test to
-        // pass. If you're running a server listening on 0.0.0.0:3000, then you
-        // will get a different error response.
+        // To debug what rusoto and httpmock are doing, enable logger and run
+        // tests with debug or trace level.
+        // let _ = env_logger::try_init();
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("Authorization", "Bearer abc")
+                .query_param("creator_role", "eq.tangram_user")
+                .path("/datasets");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([]));
+        });
+
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("ls")
             .arg("--creator=tangram_user")
+            .env("BOLSTER__DATABASE__URL", server.base_url())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "error trying to connect: tcp connect error: Connection refused",
-            ));
+            .success()
+            .stdout(predicate::str::contains("No datasets found!"));
+        mock.assert();
     }
 
     #[test]
