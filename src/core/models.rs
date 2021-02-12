@@ -63,7 +63,8 @@ impl Dataset {
 // https://serde.rs/custom-date-format.html
 mod notz_rfc_3339 {
     use chrono::{DateTime, TimeZone, Utc};
-    use serde::{self, Deserialize, Deserializer, Serializer};
+    use serde::{self, Deserialize, Deserializer};
+    // use serde::{self, Deserialize, Deserializer, Serializer};
 
     const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f";
 
@@ -74,6 +75,7 @@ mod notz_rfc_3339 {
     //        S: Serializer
     //
     // although it may also be generic over the input types T.
+    /*
     pub fn serialize<S>(date: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -81,6 +83,7 @@ mod notz_rfc_3339 {
         let s = format!("{}", date.format(FORMAT));
         serializer.serialize_str(&s)
     }
+    */
 
     // The signature of a deserialize_with function must follow the pattern:
     //

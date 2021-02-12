@@ -105,6 +105,7 @@ impl Default for DatasetGetRequest {
     }
 }
 
+/*
 pub fn datasets_patch(
     configuration: &DatabaseApiConfig,
     uuid: Uuid,
@@ -134,6 +135,7 @@ pub fn datasets_patch(
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
 }
+*/
 
 pub fn datasets_get(
     configuration: &DatabaseApiConfig,
