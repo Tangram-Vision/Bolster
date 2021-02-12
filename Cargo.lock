@@ -356,6 +356,7 @@ dependencies = [
  "anyhow",
  "assert_cmd",
  "better-panic",
+ "byte-unit",
  "chrono",
  "clap",
  "config",
@@ -385,6 +386,15 @@ name = "bumpalo"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f07aa6688c702439a1be0307b6a94dffe1168569e45b9500c1372bc580740d59"
+
+[[package]]
+name = "byte-unit"
+version = "4.0.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c8758c32833faaae35b24a73d332e62d0528e89076ae841c63940e37008b153"
+dependencies = [
+ "utf8-width",
+]
 
 [[package]]
 name = "byteorder"
@@ -2904,6 +2914,12 @@ dependencies = [
  "percent-encoding",
  "serde 1.0.123",
 ]
+
+[[package]]
+name = "utf8-width"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9071ac216321a4470a69fb2b28cfc68dcd1a39acd877c8be8e014df6772d8efa"
 
 [[package]]
 name = "uuid"

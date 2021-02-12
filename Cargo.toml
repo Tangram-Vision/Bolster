@@ -19,6 +19,7 @@ tangram-internal = []
 [dependencies]
 anyhow = "1.0"
 better-panic = "0.2"
+byte-unit = "4.0"
 chrono = "0.4"
 # Using clap beta because it's pretty stable and makes many breaking changes,
 # we might as well be forward-looking with dependencies since bolster is a

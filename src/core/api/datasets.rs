@@ -142,7 +142,7 @@ pub fn datasets_get(
     debug!("building get request for: {:?}", params);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
+    let url = format!("{}/datasets?select=*,files(*)", configuration.base_url);
     let mut req_builder = client.get(url.as_str());
 
     if let Some(uuid) = &params.uuid {

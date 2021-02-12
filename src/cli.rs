@@ -4,6 +4,7 @@
 // ----------------------------
 
 use anyhow::Result;
+use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
@@ -94,10 +95,51 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
 
             let datasets = commands::list_datasets(&db_config, &get_params)?;
 
-            // TODO: use generic, customizable formatter (e.g. kubernetes get)
-            // TODO: show creator for tangram-internal build
-            for d in datasets.iter() {
-                println!("{} {} {}", d.uuid, d.created_date, d.url);
+            if datasets.is_empty() {
+                println!("No datasets found!");
+            } else {
+                // TODO: use generic, customizable formatter (e.g. kubernetes get)
+                // TODO: show creator for tangram-internal build
+
+                // If user is listing a single dataset, show its files...
+                if uuid.is_some() {
+                    if datasets[0].files.is_empty() {
+                        println!("No files found in dataset {}", datasets[0].uuid.to_string());
+                    } else {
+                        println!("Files in dataset {}:\n", datasets[0].uuid.to_string());
+                        println!("{:<32} {:<12} URL", "Created Datetime", "Filesize",);
+                        for f in &datasets[0].files {
+                            println!(
+                                "{:<32} {:<12} {}",
+                                f.created_date.to_string(),
+                                Byte::from_bytes(f.filesize as u128)
+                                    .get_appropriate_unit(false)
+                                    .to_string(),
+                                f.url,
+                            );
+                        }
+                    }
+                }
+                // ... otherwise show just datasets
+                else {
+                    println!(
+                        "{:<40} {:<32} {:<8} {:<12}",
+                        "UUID", "Created Datetime", "# Files", "Filesize",
+                    );
+                    for d in datasets {
+                        println!(
+                            "{:<40} {:<32} {:<8} {:<12}",
+                            d.uuid.to_string(),
+                            d.created_date.to_string(),
+                            d.files.len(),
+                            Byte::from_bytes(
+                                d.files.iter().fold(0, |acc, x| acc + x.filesize as u128)
+                            )
+                            .get_appropriate_unit(false)
+                            .to_string()
+                        );
+                    }
+                }
             }
         }
         Some(("upload", upload_matches)) => {
