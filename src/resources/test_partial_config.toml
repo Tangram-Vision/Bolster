@@ -1,5 +1,6 @@
 [database]
 jwt = "abc"
+url = "http://0.0.0.0:4678"
 
 [aws_s3]
 access_key = "abc"

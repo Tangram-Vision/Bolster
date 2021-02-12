@@ -15,14 +15,14 @@ use uuid::Uuid;
 use crate::core::models::{Dataset, UploadedFile};
 
 pub struct DatabaseApiConfig {
-    pub base_url: String,
+    pub base_url: Url,
     pub client: reqwest::blocking::Client,
 }
 
 impl DatabaseApiConfig {
     pub fn new_with_params(
+        base_url: Url,
         bearer_access_token: String,
-        base_url: String,
         timeout: u64,
     ) -> Result<Self> {
         let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
@@ -45,10 +45,9 @@ impl DatabaseApiConfig {
         })
     }
 
-    pub fn new(bearer_access_token: String) -> Result<Self> {
-        let base_url = "http://0.0.0.0:3000".to_owned();
+    pub fn new(base_url: Url, bearer_access_token: String) -> Result<Self> {
         let timeout = 30;
-        Self::new_with_params(bearer_access_token, base_url, timeout)
+        Self::new_with_params(base_url, bearer_access_token, timeout)
     }
 }
 
@@ -114,8 +113,9 @@ pub fn datasets_patch(
     debug!("building patch request for: {}", uuid);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
-    let mut req_builder = client.patch(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    let mut req_builder = client.patch(api_url.as_str());
 
     req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
 
@@ -144,8 +144,10 @@ pub fn datasets_get(
     debug!("building get request for: {:?}", params);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets?select=*,files(*)", configuration.base_url);
-    let mut req_builder = client.get(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    api_url.set_query(Some("select=*,files(*)"));
+    let mut req_builder = client.get(api_url.as_str());
 
     if let Some(uuid) = &params.uuid {
         req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid))]);
@@ -196,8 +198,9 @@ pub fn datasets_post(
     debug!("building post request for: {:?}", request_body);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
-    let mut req_builder = client.post(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    let mut req_builder = client.post(api_url.as_str());
 
     req_builder = req_builder.json(&request_body);
 
@@ -229,8 +232,9 @@ pub fn files_get(
     );
     let client = &configuration.client;
 
-    let url = format!("{}/files", configuration.base_url);
-    let mut req_builder = client.get(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("files");
+    let mut req_builder = client.get(api_url.as_str());
 
     req_builder = req_builder.query(&[("dataset", format!("eq.{}", dataset_uuid))]);
     req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
@@ -259,7 +263,8 @@ pub fn files_post(
     debug!("building files post request for: {} {}", dataset_uuid, url);
     let client = &configuration.client;
 
-    let api_url = format!("{}/files", configuration.base_url);
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("files");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
@@ -314,9 +319,12 @@ mod tests {
                 }]));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).unwrap();
@@ -353,9 +361,12 @@ mod tests {
                 }]));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest {
             after_date: Some(NaiveDate::from_str("2021-01-01").unwrap()),
             order: Some(DatasetOrdering::CreatorDesc),
@@ -393,9 +404,12 @@ mod tests {
                 }));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -421,9 +435,12 @@ mod tests {
                 .body("this isn't actually json");
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -448,9 +465,12 @@ mod tests {
                 .json_body(json!({"message": "JWSError JWSInvalidSignature"}));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected status code error");
@@ -481,9 +501,12 @@ mod tests {
                 .body("Should never see this due to timeout");
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 1)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            1,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected timeout error");
