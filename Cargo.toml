@@ -26,7 +26,7 @@ chrono = "0.4"
 # https://github.com/clap-rs/clap/blob/master/CHANGELOG.md#v300-beta2-2020-09-18
 clap = "3.0.0-beta.2"
 config = "0.10"
-env_logger = "0.8.2"
+env_logger = "0.8"
 human-panic = "1.0"
 lazy_static = "1.4"
 log = "0.4"
@@ -50,3 +50,5 @@ features = ["json", "blocking"]
 
 [dev-dependencies]
 assert_cmd = "1.0"
+httpmock = "0.5"
+predicates = "1.0"

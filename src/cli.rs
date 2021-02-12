@@ -13,8 +13,7 @@ use strum::VariantNames;
 use uuid::Uuid;
 
 use crate::app_config::{DatabaseConfig, StorageProviderChoices};
-use crate::core::api;
-use crate::core::api::datasets::{DatasetGetRequest, DatasetOrdering};
+use crate::core::api::datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering};
 use crate::core::api::storage;
 use crate::core::commands;
 
@@ -44,12 +43,12 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
 
     // Derive config needed for all commands (they all interact with the database)
     let jwt = config.clone().try_into::<DatabaseConfig>()?.database.jwt;
-    let api_config = api::Configuration::new(jwt);
+    let db_config = DatabaseApiConfig::new(jwt)?;
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
         Some(("create", _create_matches)) => {
-            commands::create_dataset(&api_config)?;
+            commands::create_dataset(&db_config)?;
         }
         Some(("ls", ls_matches)) => {
             // For optional arguments, if they're missing (ArgumentNotFound)
@@ -93,9 +92,10 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 offset,
             };
 
-            let datasets = commands::list_datasets(&api_config, &get_params)?;
+            let datasets = commands::list_datasets(&db_config, &get_params)?;
 
             // TODO: use generic, customizable formatter (e.g. kubernetes get)
+            // TODO: show creator for tangram-internal build
             for d in datasets.iter() {
                 println!("{} {} {}", d.uuid, d.created_date, d.url);
             }
@@ -108,7 +108,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let url = commands::upload_file(storage_config, dataset_uuid, Path::new(input_file))?;
-            commands::update_dataset(&api_config, dataset_uuid, &url)?;
+            commands::update_dataset(&db_config, dataset_uuid, &url)?;
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
@@ -117,7 +117,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 uuid: Some(dataset_uuid),
                 ..Default::default()
             };
-            let datasets = commands::list_datasets(&api_config, &get_params)?;
+            let datasets = commands::list_datasets(&db_config, &get_params)?;
             let dataset = &datasets[0];
             commands::download_file(config, &dataset.url)?;
         }
@@ -258,4 +258,28 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
     let cli_matches = cli_app.get_matches();
 
     Ok(cli_matches)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_missing_database_jwt() {
+        // Initialize configuration
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[database]\n",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
+        let error = cli_match(config, clap::ArgMatches::default())
+            .expect_err("Expected error due to missing database jwt");
+        assert_eq!(error.to_string(), "missing field `jwt`");
+    }
+
+    // Other CLI-related tests are in tests/test_cli.rs and act as integration
+    // tests (running the whole bolster binary) so they can properly test the
+    // ClapError.exit functionality when CLI args are malformed.
 }
