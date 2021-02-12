@@ -12,7 +12,7 @@ use std::time::Duration;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
-use crate::core::models::{Dataset, UploadedFile};
+use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
 pub struct DatabaseApiConfig {
     pub base_url: Url,
@@ -194,7 +194,7 @@ pub fn datasets_post(
     // the "metadata" key in the request body in this function.
     // Or send in a Dataset struct so serde can serialize that directly.
     request_body: serde_json::Value,
-) -> Result<Dataset> {
+) -> Result<DatasetNoFiles> {
     debug!("building post request for: {:?}", request_body);
     let client = &configuration.client;
 
@@ -212,7 +212,7 @@ pub fn datasets_post(
     debug!("content: {}", content);
 
     // TODO: save json to file and prompt user to send it to us?
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
+    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
     // PostgREST resturns a list, even when only a single object is expected
     // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
