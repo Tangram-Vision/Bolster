@@ -117,8 +117,9 @@ mod tests_internal {
     #[cfg(feature = "tangram-internal")]
     #[test]
     fn test_cli_filtering_by_creator_available() {
-        // WARNING: If you're running a server listening on 0.0.0.0:3000, then you
-        // might get a different error response
+        // WARNING: You must not be running the local server for this test to
+        // pass. If you're running a server listening on 0.0.0.0:3000, then you
+        // will get a different error response.
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")

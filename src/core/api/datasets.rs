@@ -299,6 +299,7 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .header("Authorization", "Bearer TEST-TOKEN")
+                .query_param("select", "*,files(*)")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
@@ -306,10 +307,10 @@ mod tests {
                     "created_date": "2021-02-03T21:21:57.713584",
                     "creator_role": "tangram_user",
                     "access_role": "tangram_user",
-                    "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"
-                    }
+                    },
+                    "files": [],
                 }]));
         });
 
@@ -321,7 +322,10 @@ mod tests {
         let result = datasets_get(&config, &params).unwrap();
 
         mock.assert();
-        assert_eq!(result[0].uuid, "afd56ecf-9d87-4053-8c80-0d924f06da52");
+        assert_eq!(
+            result[0].uuid,
+            Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
+        );
         assert_eq!(result.len(), 1);
     }
 
@@ -334,6 +338,7 @@ mod tests {
                 .query_param("created_date", "gte.2021-01-01")
                 .query_param("order", "creator_role.desc")
                 .query_param("limit", "17")
+                .query_param("select", "*,files(*)")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
@@ -341,10 +346,10 @@ mod tests {
                     "created_date": "2021-02-03T21:21:57.713584",
                     "creator_role": "tangram_user",
                     "access_role": "tangram_user",
-                    "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"
-                    }
+                    },
+                    "files": [],
                 }]));
         });
 
@@ -361,7 +366,10 @@ mod tests {
         let result = datasets_get(&config, &params).unwrap();
 
         mock.assert();
-        assert_eq!(result[0].uuid, "afd56ecf-9d87-4053-8c80-0d924f06da52");
+        assert_eq!(
+            result[0].uuid,
+            Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
+        );
         assert_eq!(result.len(), 1);
     }
 
