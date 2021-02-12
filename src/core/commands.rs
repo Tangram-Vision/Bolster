@@ -40,14 +40,28 @@ pub fn list_datasets(
     Ok(datasets)
 }
 
+/*
 pub fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
     datasets::datasets_patch(config, uuid, url)?;
     Ok(())
 }
+*/
 
-pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url> {
+pub fn add_file_to_dataset(
+    config: &DatabaseApiConfig,
+    uuid: Uuid,
+    url: &Url,
+    filesize: u64,
+    version: String,
+    metadata: serde_json::Value,
+) -> Result<()> {
+    datasets::files_post(config, uuid, url, filesize, version, metadata)?;
+    Ok(())
+}
+
+pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<(Url, String, u64)> {
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
@@ -59,9 +73,12 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url
     // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
     // of BufRead trait to handle big files
     let contents = fs::read(path)?;
+    let filesize = fs::metadata(path)?.len();
 
-    let url = storage::upload_file(config, contents, key)?;
-    Ok(url)
+    // TODO: get filesize
+
+    let (url, version) = storage::upload_file(config, contents, key)?;
+    Ok((url, version, filesize))
 }
 
 pub fn download_file(config: config::Config, url: &Url) -> Result<()> {

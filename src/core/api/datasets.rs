@@ -12,7 +12,7 @@ use std::time::Duration;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
-use crate::core::models::Dataset;
+use crate::core::models::{Dataset, UploadedFile};
 
 pub struct DatabaseApiConfig {
     pub base_url: String,
@@ -186,6 +186,9 @@ pub fn datasets_get(
 
 pub fn datasets_post(
     configuration: &DatabaseApiConfig,
+    // TODO: change this to just the metadata value and package that value into
+    // the "metadata" key in the request body in this function.
+    // Or send in a Dataset struct so serde can serialize that directly.
     request_body: serde_json::Value,
 ) -> Result<Dataset> {
     debug!("building post request for: {:?}", request_body);
@@ -211,6 +214,45 @@ pub fn datasets_post(
     datasets
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
+}
+
+pub fn files_post(
+    configuration: &DatabaseApiConfig,
+    // TODO: change this to a Dataset struct
+    dataset_uuid: Uuid,
+    url: &Url,
+    filesize: u64,
+    version: String,
+    metadata: serde_json::Value,
+) -> Result<UploadedFile> {
+    debug!("building files post request for: {} {}", dataset_uuid, url);
+    let client = &configuration.client;
+
+    let api_url = format!("{}/files", configuration.base_url);
+    let mut req_builder = client.post(api_url.as_str());
+
+    let req_body = json!({
+        "dataset": dataset_uuid,
+        "url": url,
+        "filesize": filesize,
+        "version": version,
+        "metadata": metadata,
+    });
+    req_builder = req_builder.json(&req_body);
+
+    let request = req_builder.build()?;
+    let response = client.execute(request)?.error_for_status()?;
+    // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
+
+    debug!("status: {}", response.status());
+    let content = response.text()?;
+    debug!("response content: {}", content);
+
+    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
+        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    uploaded_files
+        .pop()
+        .ok_or_else(|| anyhow!("Database returned no info for updated File!"))
 }
 
 #[cfg(test)]

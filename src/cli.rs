@@ -8,6 +8,7 @@ use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
+use serde_json::json;
 use std::path::Path;
 use std::str::FromStr;
 use strum::VariantNames;
@@ -149,8 +150,17 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
             let storage_config = storage::StorageConfig::new(config, provider)?;
-            let url = commands::upload_file(storage_config, dataset_uuid, Path::new(input_file))?;
-            commands::update_dataset(&db_config, dataset_uuid, &url)?;
+            let (url, version, filesize) =
+                commands::upload_file(storage_config, dataset_uuid, Path::new(input_file))?;
+            let metadata = json!({});
+            commands::add_file_to_dataset(
+                &db_config,
+                dataset_uuid,
+                &url,
+                filesize,
+                version,
+                metadata,
+            )?;
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
