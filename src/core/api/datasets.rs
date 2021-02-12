@@ -216,6 +216,35 @@ pub fn datasets_post(
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
 }
 
+pub fn files_get(
+    configuration: &DatabaseApiConfig,
+    dataset_uuid: Uuid,
+    filename: &str,
+) -> Result<Vec<UploadedFile>> {
+    debug!(
+        "building files get request for: {} {}",
+        dataset_uuid, filename
+    );
+    let client = &configuration.client;
+
+    let url = format!("{}/files", configuration.base_url);
+    let mut req_builder = client.get(url.as_str());
+
+    req_builder = req_builder.query(&[("dataset", format!("eq.{}", dataset_uuid))]);
+    req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
+
+    let request = req_builder.build()?;
+    let response = client.execute(request)?.error_for_status()?;
+
+    debug!("status: {}", response.status());
+    let content = response.text()?;
+    debug!("content: {}", content);
+
+    let files: Vec<UploadedFile> = serde_json::from_str(&content)
+        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    Ok(files)
+}
+
 pub fn files_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to a Dataset struct

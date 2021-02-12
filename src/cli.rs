@@ -3,7 +3,7 @@
 // Proprietary and confidential
 // ----------------------------
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
@@ -165,13 +165,19 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_uuid: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
-            let get_params = DatasetGetRequest {
-                uuid: Some(dataset_uuid),
-                ..Default::default()
-            };
-            let datasets = commands::list_datasets(&db_config, &get_params)?;
-            let dataset = &datasets[0];
-            commands::download_file(config, &dataset.url)?;
+            let filename = download_matches.value_of("filename").unwrap();
+            let files = commands::list_files(&db_config, dataset_uuid, filename)?;
+            if files.is_empty() {
+                return Err(anyhow!(
+                    "No files in dataset {} matched the filename {}",
+                    dataset_uuid,
+                    filename
+                ));
+            } else {
+                let file = &files[0];
+                // TODO: support downloading many files
+                commands::download_file(config, &file.url)?;
+            }
         }
         _ => {
             // Arguments are required by default (in Clap).
@@ -302,7 +308,9 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
         .subcommand(
             App::new("download")
                 .about("Download files in remote dataset")
-                .arg(Arg::new("dataset_uuid").required(true).takes_value(true)),
+                .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
+                .arg(Arg::new("filename").about("Filename of file to download").required(true).takes_value(true))
+            // TODO: add arg to filter file(s) to download from dataset?
             // TODO: add path to download files to?
         )
         .subcommand(App::new("config").about("Show Configuration"));

@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
 use super::api::storage;
 use super::api::storage::StorageConfig;
-use super::models::Dataset;
+use super::models::{Dataset, UploadedFile};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
 pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
@@ -79,6 +79,16 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<(Ur
 
     let (url, version) = storage::upload_file(config, contents, key)?;
     Ok((url, version, filesize))
+}
+
+pub fn list_files(
+    config: &DatabaseApiConfig,
+    dataset_uuid: Uuid,
+    filename: &str,
+) -> Result<Vec<UploadedFile>> {
+    let files = datasets::files_get(config, dataset_uuid, filename)?;
+
+    Ok(files)
 }
 
 pub fn download_file(config: config::Config, url: &Url) -> Result<()> {
