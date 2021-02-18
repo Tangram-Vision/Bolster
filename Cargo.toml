@@ -48,7 +48,7 @@ uuid = { version = "0.8", features = ["serde"]}
 [dependencies.reqwest]
 version = "^0.10"
 default-features = false
-features = ["json", "blocking"]
+features = ["json", "blocking", "native-tls"]
 
 [dev-dependencies]
 assert_cmd = "1.0"
