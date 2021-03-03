@@ -22,6 +22,12 @@ cargo run -- help ls
 cargo run -- ls --help
 ```
 
+To install the `bolster` app locally, do:
+
+```
+cargo install --features=tangram-internal --path .
+```
+
 Run tests by running both of the below commands:
 
 ```
@@ -32,8 +38,8 @@ cargo test --features=tangram-internal tests_internal
 To test interaction with the Datasets API you must run a local version of
 that API ([see corresponding
 README](https://gitlab.com/tangram-vision/devops/-/tree/greg/postgrest-app/tangram-datasets))
-and make sure your configuration is pointed at the local API endpoint (e.g.
-set `base_url = "http://0.0.0.0:3000"`).
+and make sure your configuration file has the `database.url` pointed at the
+local API endpoint (e.g. set `url = "http://0.0.0.0:3000"`).
 
 # Documentation
 
