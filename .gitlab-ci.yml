@@ -5,22 +5,6 @@
 #       `image: 'registry.gitlab.com/tangram-vision/docker-base'`.
 #       If this is the case, make sure to include SSH loading in
 #       `before_script`
-image: "registry.gitlab.com/tangram-vision/docker-base:latest"
-
-stages:
-  - test
-  - doc
-  - build_artifacts
-
-before_script:
-  # Update rust in case the latest version isn't built into our "tang" docker
-  # image.
-  - CARGO_HOME=/usr/local/cargo rustup update
-  # Load SSH key we can use to pull internal dependencies
-  # From: https://docs.gitlab.com/ce/ci/ssh_keys/README.html
-  - "which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )"
-  - eval $(ssh-agent -s)
-  - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
 
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
@@ -34,11 +18,32 @@ variables:
   - cargo/git/db/
   - target/
 
-cache:
-  # Only pull the cache, don't push because it takes a while.
-  # The build_cache job populates the cache.
-  policy: pull
-  paths: *cache_paths
+
+default:
+  image: "registry.gitlab.com/tangram-vision/docker-base:latest"
+  before_script:
+    # Update rust in case the latest version isn't built into our "tang" docker
+    # image.
+    # For info about RUSTUP_PERMIT_COPY_RENAME, see
+    # https://github.com/rust-lang/rustup/issues/2542
+    - CARGO_HOME=/usr/local/cargo RUSTUP_PERMIT_COPY_RENAME=1 rustup update
+    # Load SSH key we can use to pull internal dependencies
+    # From: https://docs.gitlab.com/ce/ci/ssh_keys/README.html
+    - "which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )"
+    - eval $(ssh-agent -s)
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
+  cache:
+    # Only pull the cache, don't push because it takes a while.
+    # The build_cache job populates the cache.
+    policy: pull
+    paths: *cache_paths
+
+
+stages:
+  - test
+  - doc
+  - build_artifacts
+
 
 ##### ########## ########## ########## ########## #####
 # TEST STAGE
