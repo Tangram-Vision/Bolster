@@ -4,8 +4,10 @@
 // ----------------------------
 
 use assert_cmd::prelude::*;
+use httpmock::Method::GET;
+use httpmock::MockServer;
 use predicates::prelude::*;
-
+use serde_json::json;
 use std::process::Command;
 
 #[cfg(test)]
@@ -108,28 +110,78 @@ mod tests {
                 "'digitalocean' isn't a valid value for '--provider <PROVIDER>'",
             ));
     }
+
+    #[test]
+    fn test_cli_no_files_in_dataset() {
+        // To debug what rusoto and httpmock are doing, enable logger and run
+        // tests with debug or trace level.
+        // let _ = env_logger::try_init();
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("Authorization", "Bearer abc")
+                .query_param("uuid", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
+                .path("/datasets");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([{"uuid": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                    "created_date": "2021-02-03T21:21:57.713584",
+                    "creator_role": "tangram_user",
+                    "access_role": "tangram_user",
+                    "metadata": {
+                        "description": "Test"
+                    },
+                    "files": [],
+                }]));
+        });
+
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("ls")
+            .arg("--uuid=26fb2ac2-642a-4d7e-8233-b1835623b46b")
+            .env("BOLSTER__DATABASE__URL", server.base_url())
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("No files found in dataset"));
+        mock.assert();
+    }
 }
 
 #[cfg(all(test, feature = "tangram-internal"))]
 mod tests_internal {
     use super::*;
 
-    #[cfg(feature = "tangram-internal")]
     #[test]
     fn test_cli_filtering_by_creator_available() {
-        // WARNING: If you're running a server listening on 0.0.0.0:3000, then you
-        // might get a different error response
+        // To debug what rusoto and httpmock are doing, enable logger and run
+        // tests with debug or trace level.
+        // let _ = env_logger::try_init();
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("Authorization", "Bearer abc")
+                .query_param("creator_role", "eq.tangram_user")
+                .path("/datasets");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([]));
+        });
+
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("ls")
             .arg("--creator=tangram_user")
+            .env("BOLSTER__DATABASE__URL", server.base_url())
             .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "error trying to connect: tcp connect error: Connection refused",
-            ));
+            .success()
+            .stdout(predicate::str::contains("No datasets found!"));
+        mock.assert();
     }
 
     #[test]

@@ -60,7 +60,11 @@ impl StorageConfig {
 }
 
 #[tokio::main]
-pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> Result<Url> {
+pub async fn upload_file(
+    config: StorageConfig,
+    data: Vec<u8>,
+    key: String,
+) -> Result<(Url, String)> {
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
         r => format!("s3.{}.amazonaws.com", r.name()),
@@ -88,8 +92,10 @@ pub async fn upload_file(config: StorageConfig, data: Vec<u8>, key: String) -> R
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
     debug!("upload_file response {:?}", resp);
-    // TODO: get version_id and store to database
-    Ok(url)
+    let version = resp
+        .version_id
+        .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
+    Ok((url, version))
 }
 
 #[tokio::main]

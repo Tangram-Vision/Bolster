@@ -81,6 +81,7 @@ pub struct DatabaseConfig {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Database {
     pub jwt: String,
+    pub url: Url,
 }
 
 #[cfg(feature = "tangram-internal")]

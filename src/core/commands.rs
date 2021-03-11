@@ -13,7 +13,7 @@ use uuid::Uuid;
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
 use super::api::storage;
 use super::api::storage::StorageConfig;
-use super::models::Dataset;
+use super::models::{Dataset, UploadedFile};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
 pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
@@ -25,8 +25,6 @@ pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
         // TODO: create Dataset model to pass in or just json?
         json!({
             "metadata": {"description": "TODO: get from cmdline or prompt"},
-            // TODO: remove url -- it will be moved to files table
-            "url": "http://example.com",
         }),
     )?;
     println!("Created new dataset with UUID: {}", dataset.uuid);
@@ -42,14 +40,28 @@ pub fn list_datasets(
     Ok(datasets)
 }
 
+/*
 pub fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Result<()> {
     // TODO: change to update files (not datasets) when files are their own db table
 
     datasets::datasets_patch(config, uuid, url)?;
     Ok(())
 }
+*/
 
-pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url> {
+pub fn add_file_to_dataset(
+    config: &DatabaseApiConfig,
+    uuid: Uuid,
+    url: &Url,
+    filesize: u64,
+    version: String,
+    metadata: serde_json::Value,
+) -> Result<()> {
+    datasets::files_post(config, uuid, url, filesize, version, metadata)?;
+    Ok(())
+}
+
+pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<(Url, String, u64)> {
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
@@ -61,9 +73,22 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<Url
     // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
     // of BufRead trait to handle big files
     let contents = fs::read(path)?;
+    let filesize = fs::metadata(path)?.len();
 
-    let url = storage::upload_file(config, contents, key)?;
-    Ok(url)
+    // TODO: get filesize
+
+    let (url, version) = storage::upload_file(config, contents, key)?;
+    Ok((url, version, filesize))
+}
+
+pub fn list_files(
+    config: &DatabaseApiConfig,
+    dataset_uuid: Uuid,
+    filename: &str,
+) -> Result<Vec<UploadedFile>> {
+    let files = datasets::files_get(config, dataset_uuid, filename)?;
+
+    Ok(files)
 }
 
 pub fn download_file(config: config::Config, url: &Url) -> Result<()> {

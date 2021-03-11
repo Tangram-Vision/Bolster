@@ -12,17 +12,17 @@ use std::time::Duration;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
-use crate::core::models::Dataset;
+use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
 pub struct DatabaseApiConfig {
-    pub base_url: String,
+    pub base_url: Url,
     pub client: reqwest::blocking::Client,
 }
 
 impl DatabaseApiConfig {
     pub fn new_with_params(
+        base_url: Url,
         bearer_access_token: String,
-        base_url: String,
         timeout: u64,
     ) -> Result<Self> {
         let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
@@ -45,10 +45,9 @@ impl DatabaseApiConfig {
         })
     }
 
-    pub fn new(bearer_access_token: String) -> Result<Self> {
-        let base_url = "http://0.0.0.0:3000".to_owned();
+    pub fn new(base_url: Url, bearer_access_token: String) -> Result<Self> {
         let timeout = 30;
-        Self::new_with_params(bearer_access_token, base_url, timeout)
+        Self::new_with_params(base_url, bearer_access_token, timeout)
     }
 }
 
@@ -105,6 +104,7 @@ impl Default for DatasetGetRequest {
     }
 }
 
+/*
 pub fn datasets_patch(
     configuration: &DatabaseApiConfig,
     uuid: Uuid,
@@ -113,8 +113,9 @@ pub fn datasets_patch(
     debug!("building patch request for: {}", uuid);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
-    let mut req_builder = client.patch(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    let mut req_builder = client.patch(api_url.as_str());
 
     req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
 
@@ -134,6 +135,7 @@ pub fn datasets_patch(
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
 }
+*/
 
 pub fn datasets_get(
     configuration: &DatabaseApiConfig,
@@ -142,8 +144,10 @@ pub fn datasets_get(
     debug!("building get request for: {:?}", params);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
-    let mut req_builder = client.get(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    api_url.set_query(Some("select=*,files(*)"));
+    let mut req_builder = client.get(api_url.as_str());
 
     if let Some(uuid) = &params.uuid {
         req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid))]);
@@ -186,13 +190,17 @@ pub fn datasets_get(
 
 pub fn datasets_post(
     configuration: &DatabaseApiConfig,
+    // TODO: change this to just the metadata value and package that value into
+    // the "metadata" key in the request body in this function.
+    // Or send in a Dataset struct so serde can serialize that directly.
     request_body: serde_json::Value,
-) -> Result<Dataset> {
+) -> Result<DatasetNoFiles> {
     debug!("building post request for: {:?}", request_body);
     let client = &configuration.client;
 
-    let url = format!("{}/datasets", configuration.base_url);
-    let mut req_builder = client.post(url.as_str());
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("datasets");
+    let mut req_builder = client.post(api_url.as_str());
 
     req_builder = req_builder.json(&request_body);
 
@@ -204,13 +212,83 @@ pub fn datasets_post(
     debug!("content: {}", content);
 
     // TODO: save json to file and prompt user to send it to us?
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
+    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
     // PostgREST resturns a list, even when only a single object is expected
     // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
     datasets
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
+}
+
+pub fn files_get(
+    configuration: &DatabaseApiConfig,
+    dataset_uuid: Uuid,
+    filename: &str,
+) -> Result<Vec<UploadedFile>> {
+    debug!(
+        "building files get request for: {} {}",
+        dataset_uuid, filename
+    );
+    let client = &configuration.client;
+
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("files");
+    let mut req_builder = client.get(api_url.as_str());
+
+    req_builder = req_builder.query(&[("dataset", format!("eq.{}", dataset_uuid))]);
+    req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
+
+    let request = req_builder.build()?;
+    let response = client.execute(request)?.error_for_status()?;
+
+    debug!("status: {}", response.status());
+    let content = response.text()?;
+    debug!("content: {}", content);
+
+    let files: Vec<UploadedFile> = serde_json::from_str(&content)
+        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    Ok(files)
+}
+
+pub fn files_post(
+    configuration: &DatabaseApiConfig,
+    // TODO: change this to a Dataset struct
+    dataset_uuid: Uuid,
+    url: &Url,
+    filesize: u64,
+    version: String,
+    metadata: serde_json::Value,
+) -> Result<UploadedFile> {
+    debug!("building files post request for: {} {}", dataset_uuid, url);
+    let client = &configuration.client;
+
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("files");
+    let mut req_builder = client.post(api_url.as_str());
+
+    let req_body = json!({
+        "dataset": dataset_uuid,
+        "url": url,
+        "filesize": filesize,
+        "version": version,
+        "metadata": metadata,
+    });
+    req_builder = req_builder.json(&req_body);
+
+    let request = req_builder.build()?;
+    let response = client.execute(request)?.error_for_status()?;
+    // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
+
+    debug!("status: {}", response.status());
+    let content = response.text()?;
+    debug!("response content: {}", content);
+
+    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
+        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    uploaded_files
+        .pop()
+        .ok_or_else(|| anyhow!("Database returned no info for updated File!"))
 }
 
 #[cfg(test)]
@@ -226,6 +304,7 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .header("Authorization", "Bearer TEST-TOKEN")
+                .query_param("select", "*,files(*)")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
@@ -233,22 +312,28 @@ mod tests {
                     "created_date": "2021-02-03T21:21:57.713584",
                     "creator_role": "tangram_user",
                     "access_role": "tangram_user",
-                    "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"
-                    }
+                    },
+                    "files": [],
                 }]));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).unwrap();
 
         mock.assert();
-        assert_eq!(result[0].uuid, "afd56ecf-9d87-4053-8c80-0d924f06da52");
+        assert_eq!(
+            result[0].uuid,
+            Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
+        );
         assert_eq!(result.len(), 1);
     }
 
@@ -261,6 +346,7 @@ mod tests {
                 .query_param("created_date", "gte.2021-01-01")
                 .query_param("order", "creator_role.desc")
                 .query_param("limit", "17")
+                .query_param("select", "*,files(*)")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
@@ -268,16 +354,19 @@ mod tests {
                     "created_date": "2021-02-03T21:21:57.713584",
                     "creator_role": "tangram_user",
                     "access_role": "tangram_user",
-                    "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"
-                    }
+                    },
+                    "files": [],
                 }]));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest {
             after_date: Some(NaiveDate::from_str("2021-01-01").unwrap()),
             order: Some(DatasetOrdering::CreatorDesc),
@@ -288,7 +377,10 @@ mod tests {
         let result = datasets_get(&config, &params).unwrap();
 
         mock.assert();
-        assert_eq!(result[0].uuid, "afd56ecf-9d87-4053-8c80-0d924f06da52");
+        assert_eq!(
+            result[0].uuid,
+            Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
+        );
         assert_eq!(result.len(), 1);
     }
 
@@ -312,9 +404,12 @@ mod tests {
                 }));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -340,9 +435,12 @@ mod tests {
                 .body("this isn't actually json");
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
@@ -367,9 +465,12 @@ mod tests {
                 .json_body(json!({"message": "JWSError JWSInvalidSignature"}));
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 10)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected status code error");
@@ -400,9 +501,12 @@ mod tests {
                 .body("Should never see this due to timeout");
         });
 
-        let config =
-            DatabaseApiConfig::new_with_params("TEST-TOKEN".to_owned(), server.base_url(), 1)
-                .unwrap();
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            1,
+        )
+        .unwrap();
         let params = DatasetGetRequest::default();
 
         let result = datasets_get(&config, &params).expect_err("Expected timeout error");

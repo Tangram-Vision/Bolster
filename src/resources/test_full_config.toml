@@ -1,5 +1,6 @@
 [database]
 jwt = "abc"
+url = "http://0.0.0.0:4678"
 
 [digitalocean_spaces]
 access_key = "abc"

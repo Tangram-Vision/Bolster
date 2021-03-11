@@ -19,6 +19,7 @@ tangram-internal = []
 [dependencies]
 anyhow = "1.0"
 better-panic = "0.2"
+byte-unit = "4.0"
 chrono = "0.4"
 # Using clap beta because it's pretty stable and makes many breaking changes,
 # we might as well be forward-looking with dependencies since bolster is a
@@ -36,17 +37,18 @@ rusoto_credential = "0.46"
 rusoto_s3 = "0.46"
 serde_json = "1.0"
 serde = { version = "1.0", features = ["derive"]}
+shellexpand = "2.1"
 strum = "0.20"
 strum_macros = "0.20"
 tokio = { version = "1.1", features = ["fs"]}
 toml = "0.5"
 url = { version = "2.2", features = ["serde"]}
-uuid = "0.8"
+uuid = { version = "0.8", features = ["serde"]}
 
 [dependencies.reqwest]
 version = "^0.10"
 default-features = false
-features = ["json", "blocking"]
+features = ["json", "blocking", "native-tls"]
 
 [dev-dependencies]
 assert_cmd = "1.0"

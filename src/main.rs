@@ -14,6 +14,9 @@ use anyhow::Result;
 
 fn main() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.
+    //
+    // Example of what panic message looks like:
+    // https://docs.rs/human-panic/1.0.3/human_panic/
     #[cfg(not(debug_assertions))]
     {
         setup_panic!();
@@ -42,9 +45,9 @@ fn main() -> Result<()> {
     if let Some(config_file) = cli_matches.value_of("config") {
         settings.merge(config::File::with_name(config_file))?;
     } else {
-        settings.merge(config::File::with_name(
+        settings.merge(config::File::with_name(&shellexpand::tilde(
             "~/.config/tangramvision/bolster.toml",
-        ))?;
+        )))?;
     }
 
     // Override with environment variables, if present
