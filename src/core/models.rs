@@ -15,8 +15,6 @@ pub struct Dataset {
     pub uuid: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    pub creator_role: String,
-    pub access_role: String,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
@@ -30,8 +28,6 @@ pub struct DatasetNoFiles {
     pub uuid: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    pub creator_role: String,
-    pub access_role: String,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.

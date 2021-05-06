@@ -58,10 +58,10 @@ pub enum DatasetOrdering {
     CreatedDateAsc,
     #[strum(serialize = "created_date.desc")]
     CreatedDateDesc,
-    #[strum(serialize = "creator.asc")]
-    CreatorAsc,
-    #[strum(serialize = "creator.desc")]
-    CreatorDesc,
+    // #[strum(serialize = "creator.asc")]
+    // CreatorAsc,
+    // #[strum(serialize = "creator.desc")]
+    // CreatorDesc,
 }
 
 impl DatasetOrdering {
@@ -70,8 +70,8 @@ impl DatasetOrdering {
     // between them
     fn to_database_field(&self) -> String {
         match self {
-            DatasetOrdering::CreatorAsc => "creator_role.asc".to_owned(),
-            DatasetOrdering::CreatorDesc => "creator_role.desc".to_owned(),
+            // DatasetOrdering::CreatorAsc => "creator_role.asc".to_owned(),
+            // DatasetOrdering::CreatorDesc => "creator_role.desc".to_owned(),
             other => other.to_string(),
             // TODO: test order by creator
         }
@@ -83,7 +83,6 @@ pub struct DatasetGetRequest {
     pub uuid: Option<Uuid>,
     pub before_date: Option<NaiveDate>,
     pub after_date: Option<NaiveDate>,
-    pub creator: Option<String>,
     // TODO: implement metadata: Option<String>,
     pub order: Option<DatasetOrdering>,
     pub limit: Option<usize>,
@@ -96,7 +95,6 @@ impl Default for DatasetGetRequest {
             uuid: None,
             before_date: None,
             after_date: None,
-            creator: None,
             order: None,
             limit: None,
             offset: None,
@@ -157,9 +155,6 @@ pub fn datasets_get(
     }
     if let Some(after_date) = &params.after_date {
         req_builder = req_builder.query(&[("created_date", format!("gte.{}", after_date))]);
-    }
-    if let Some(creator) = &params.creator {
-        req_builder = req_builder.query(&[("creator_role", format!("eq.{}", creator))]);
     }
     // TODO: implement metadata
     // if let Some(metadata) = params.metadata {
@@ -310,8 +305,6 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584",
-                    "creator_role": "tangram_user",
-                    "access_role": "tangram_user",
                     "metadata": {
                         "description": "Test"
                     },
@@ -344,7 +337,7 @@ mod tests {
             when.method(GET)
                 .header("Authorization", "Bearer TEST-TOKEN")
                 .query_param("created_date", "gte.2021-01-01")
-                .query_param("order", "creator_role.desc")
+                .query_param("order", "created_date.desc")
                 .query_param("limit", "17")
                 .query_param("select", "*,files(*)")
                 .path("/datasets");
@@ -352,8 +345,6 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584",
-                    "creator_role": "tangram_user",
-                    "access_role": "tangram_user",
                     "metadata": {
                         "description": "Test"
                     },
@@ -369,7 +360,7 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest {
             after_date: Some(NaiveDate::from_str("2021-01-01").unwrap()),
-            order: Some(DatasetOrdering::CreatorDesc),
+            order: Some(DatasetOrdering::CreatedDateDesc),
             limit: Some(17),
             ..Default::default()
         };
@@ -395,8 +386,6 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584",
-                    "creator_role": "tangram_user",
-                    "access_role": "tangram_user",
                     "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"

@@ -127,8 +127,6 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584",
-                    "creator_role": "tangram_user",
-                    "access_role": "tangram_user",
                     "metadata": {
                         "description": "Test"
                     },
@@ -154,6 +152,7 @@ mod tests {
 mod tests_internal {
     use super::*;
 
+    /*
     #[test]
     fn test_cli_filtering_by_creator_available() {
         // To debug what rusoto and httpmock are doing, enable logger and run
@@ -183,6 +182,7 @@ mod tests_internal {
             .stdout(predicate::str::contains("No datasets found!"));
         mock.assert();
     }
+    */
 
     #[test]
     fn test_cli_digitalocean_provider_available() {
