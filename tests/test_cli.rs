@@ -44,7 +44,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "isn't a valid value for 'uuid': invalid length",
+                "isn't a valid value for 'dataset_uuid': invalid length",
             ));
     }
 
@@ -121,11 +121,12 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .header("Authorization", "Bearer abc")
-                .query_param("uuid", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
+                .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
-                .json_body(json!([{"uuid": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                .json_body(json!([{
+                    "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"

@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Dataset {
     /// Note: This is a Primary Key.<pk/>
-    pub uuid: Uuid,
+    pub dataset_id: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
@@ -25,7 +25,7 @@ pub struct Dataset {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct DatasetNoFiles {
     /// Note: This is a Primary Key.<pk/>
-    pub uuid: Uuid,
+    pub dataset_id: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
@@ -36,7 +36,10 @@ pub struct DatasetNoFiles {
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct UploadedFile {
-    pub uuid: Uuid,
+    // Don't need to reference this value anywhere, so ignoring it
+    // pub file_id: Uuid,
+    pub dataset_id: Uuid,
+
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
     // Not needed in CLI, exists in database for record-keeping

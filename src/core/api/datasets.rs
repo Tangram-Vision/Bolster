@@ -80,7 +80,7 @@ impl DatasetOrdering {
 
 #[derive(Debug)]
 pub struct DatasetGetRequest {
-    pub uuid: Option<Uuid>,
+    pub dataset_id: Option<Uuid>,
     pub before_date: Option<NaiveDate>,
     pub after_date: Option<NaiveDate>,
     // TODO: implement metadata: Option<String>,
@@ -92,7 +92,7 @@ pub struct DatasetGetRequest {
 impl Default for DatasetGetRequest {
     fn default() -> Self {
         Self {
-            uuid: None,
+            dataset_id: None,
             before_date: None,
             after_date: None,
             order: None,
@@ -147,8 +147,8 @@ pub fn datasets_get(
     api_url.set_query(Some("select=*,files(*)"));
     let mut req_builder = client.get(api_url.as_str());
 
-    if let Some(uuid) = &params.uuid {
-        req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid))]);
+    if let Some(dataset_id) = &params.dataset_id {
+        req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
     }
     if let Some(before_date) = &params.before_date {
         req_builder = req_builder.query(&[("created_date", format!("lt.{}", before_date))]);
@@ -218,12 +218,12 @@ pub fn datasets_post(
 
 pub fn files_get(
     configuration: &DatabaseApiConfig,
-    dataset_uuid: Uuid,
+    dataset_id: Uuid,
     filename: &str,
 ) -> Result<Vec<UploadedFile>> {
     debug!(
         "building files get request for: {} {}",
-        dataset_uuid, filename
+        dataset_id, filename
     );
     let client = &configuration.client;
 
@@ -231,7 +231,7 @@ pub fn files_get(
     api_url.set_path("files");
     let mut req_builder = client.get(api_url.as_str());
 
-    req_builder = req_builder.query(&[("dataset", format!("eq.{}", dataset_uuid))]);
+    req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
     req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
 
     let request = req_builder.build()?;
@@ -249,13 +249,13 @@ pub fn files_get(
 pub fn files_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to a Dataset struct
-    dataset_uuid: Uuid,
+    dataset_id: Uuid,
     url: &Url,
     filesize: u64,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<UploadedFile> {
-    debug!("building files post request for: {} {}", dataset_uuid, url);
+    debug!("building files post request for: {} {}", dataset_id, url);
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
@@ -263,7 +263,7 @@ pub fn files_post(
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
-        "dataset": dataset_uuid,
+        "dataset_id": dataset_id,
         "url": url,
         "filesize": filesize,
         "version": version,
@@ -303,7 +303,8 @@ mod tests {
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
-                .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
+                .json_body(json!([{
+                    "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
@@ -324,7 +325,7 @@ mod tests {
 
         mock.assert();
         assert_eq!(
-            result[0].uuid,
+            result[0].dataset_id,
             Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
         );
         assert_eq!(result.len(), 1);
@@ -343,7 +344,8 @@ mod tests {
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
-                .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
+                .json_body(json!([{
+                    "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
@@ -369,7 +371,7 @@ mod tests {
 
         mock.assert();
         assert_eq!(
-            result[0].uuid,
+            result[0].dataset_id,
             Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap()
         );
         assert_eq!(result.len(), 1);
@@ -384,7 +386,8 @@ mod tests {
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
-                .json_body(json!({"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
+                .json_body(json!({
+                    "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
