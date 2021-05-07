@@ -76,7 +76,8 @@ mod notz_rfc_3339 {
     use serde::{self, Deserialize, Deserializer};
     // use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f";
+    // Example: 2021-05-06T23:54:45.626411+00:00
+    const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f%:z";
 
     // The signature of a serialize_with function must follow the pattern:
     //

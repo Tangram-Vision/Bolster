@@ -126,7 +126,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
-                    "created_date": "2021-02-03T21:21:57.713584",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
                     },

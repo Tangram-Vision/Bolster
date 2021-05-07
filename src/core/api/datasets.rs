@@ -304,7 +304,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
-                    "created_date": "2021-02-03T21:21:57.713584",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
                     },
@@ -344,7 +344,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
-                    "created_date": "2021-02-03T21:21:57.713584",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
                     },
@@ -385,7 +385,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!({"uuid": "afd56ecf-9d87-4053-8c80-0d924f06da52",
-                    "created_date": "2021-02-03T21:21:57.713584",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "url": "https://example.com/afd56ecf-9d87-4053-8c80-0d924f06da52/hello.txt",
                     "metadata": {
                         "description": "Test"
