@@ -212,7 +212,7 @@ mod tests {
             ))
             .unwrap();
 
-        let url_str = "https://tangram-datasets.s3.us-east-2.amazonaws.com/test";
+        let url_str = "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/test";
         let url = Url::parse(&url_str).unwrap();
         let error = download_file(config, &url).expect_err("Missing storage config should error");
         assert!(
