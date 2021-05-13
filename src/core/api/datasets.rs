@@ -58,10 +58,6 @@ pub enum DatasetOrdering {
     CreatedDateAsc,
     #[strum(serialize = "created_date.desc")]
     CreatedDateDesc,
-    // #[strum(serialize = "creator.asc")]
-    // CreatorAsc,
-    // #[strum(serialize = "creator.desc")]
-    // CreatorDesc,
 }
 
 impl DatasetOrdering {

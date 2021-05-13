@@ -42,36 +42,12 @@ pub struct UploadedFile {
 
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    // Not needed in CLI, exists in database for record-keeping
-    // pub creator_role: String,
     pub url: Url,
     pub filesize: u64,
     // Likely unused, requesting the url w/o version downloads the latest version
     pub version: String,
     pub metadata: serde_json::Value,
 }
-
-/*
-impl Dataset {
-    pub fn new(
-        uuid: String,
-        created_date: DateTime<Utc>,
-        creator_role: String,
-        access_role: String,
-        url: Url,
-        metadata: serde_json::Value,
-    ) -> Dataset {
-        Dataset {
-            uuid,
-            created_date,
-            creator_role,
-            access_role,
-            url,
-            metadata,
-        }
-    }
-}
-*/
 
 // https://serde.rs/custom-date-format.html
 mod notz_rfc_3339 {

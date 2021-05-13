@@ -153,38 +153,6 @@ mod tests {
 mod tests_internal {
     use super::*;
 
-    /*
-    #[test]
-    fn test_cli_filtering_by_creator_available() {
-        // To debug what rusoto and httpmock are doing, enable logger and run
-        // tests with debug or trace level.
-        // let _ = env_logger::try_init();
-
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(GET)
-                .header("Authorization", "Bearer abc")
-                .query_param("creator_role", "eq.tangram_user")
-                .path("/datasets");
-            then.status(200)
-                .header("Content-Type", "application/json")
-                .json_body(json!([]));
-        });
-
-        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-
-        cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
-            .arg("ls")
-            .arg("--creator=tangram_user")
-            .env("BOLSTER__DATABASE__URL", server.base_url())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("No datasets found!"));
-        mock.assert();
-    }
-    */
-
     #[test]
     fn test_cli_digitalocean_provider_available() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");

@@ -217,19 +217,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("before-date")
                         .value_name("DATE")
                         .takes_value(true),
-                    // Originally, the API returned the creator role, but the
-                    // database schema has updated to associated datasets with
-                    // the user account. I haven't yet updated the serverside
-                    // view or bolster to be able to query by user, but we'll
-                    // probably want that in the future!
-                    // Issue for this: https://gitlab.com/tangram-vision/bolster/-/issues/11
-                    // #[cfg(feature = "tangram-internal")]
-                    // Arg::new("creator")
-                    //     .about("Show datasets created by this user")
-                    //     .short('c')
-                    //     .long("creator")
-                    //     .value_name("USERNAME")
-                    //     .takes_value(true),
                     // TODO: implement metadata
                     Arg::new("metadata")
                         .about("NOT IMPLEMENTED: Show dataset matching metadata")
