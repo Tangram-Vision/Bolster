@@ -65,13 +65,14 @@ pub fn upload_file(
     config: StorageConfig,
     dataset_id: Uuid,
     path: &Path,
+    prefix: &str,
 ) -> Result<(Url, String, u64)> {
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
-    let key = format!("{}/{}", dataset_id, key);
+    let key = format!("{}/{}/{}", prefix, dataset_id, key);
 
     // TODO: change to
     // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
@@ -131,7 +132,8 @@ mod tests {
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("nonexistent-file");
-        let error = upload_file(storage_config, dataset_id, path)
+        let prefix = "";
+        let error = upload_file(storage_config, dataset_id, path, prefix)
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
@@ -153,7 +155,8 @@ mod tests {
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new(ffi::OsStr::from_bytes(&[128u8]));
-        let error = upload_file(storage_config, dataset_id, path)
+        let prefix = "";
+        let error = upload_file(storage_config, dataset_id, path, prefix)
             .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Filename is invalid UTF8"),
@@ -175,7 +178,8 @@ mod tests {
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("/");
-        let error = upload_file(storage_config, dataset_id, path)
+        let prefix = "";
+        let error = upload_file(storage_config, dataset_id, path, prefix)
             .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Invalid filename"),
