@@ -6,6 +6,7 @@
 // TODO: extract common code between aws/digitalocean
 
 use anyhow::{anyhow, Result};
+use futures::stream::futures_unordered::FuturesUnordered;
 use futures::stream::TryStreamExt;
 use futures::stream::{unfold, Stream, StreamExt};
 use log::debug;
@@ -19,7 +20,9 @@ use rusoto_s3::{
 };
 use std::cmp::min;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use tokio::fs::File;
+use tokio::sync::mpsc;
 // TODO: clean up imports
 use tokio::io;
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -190,6 +193,55 @@ where
     }))
 }
 
+async fn upload_completed_part(
+    client: &S3Client,
+    maybe_req: std::io::Result<UploadPartRequest>,
+    completed_parts: &Arc<Mutex<Vec<CompletedPart>>>,
+) -> Result<()> {
+    match maybe_req {
+        Ok(req) => {
+            // TODO: add retry handling?
+            // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
+            // TODO: count some number of retries
+            let part_number = req.part_number;
+            debug!("Making part {} upload_part request {:?}", part_number, req);
+            let resp = client.upload_part(req).await;
+            debug!("Result of part {} upload_part {:?}", part_number, resp);
+
+            match resp {
+                Ok(response) => {
+                    if let Some(e_tag) = response.e_tag {
+                        // TODO: send completed parts back on channel or use mutex?
+                        let mut cp = completed_parts.lock().unwrap();
+                        cp.push(CompletedPart {
+                            e_tag: Some(e_tag),
+                            part_number: Some(part_number),
+                        });
+                    } else {
+                        // TODO: raise err
+                    }
+                }
+                Err(e) => {
+                    debug!("Response error {:?}", e);
+                    // TODO: retry error types that make sense to, otherwise send cancellation to S3 and ? em
+                    // TODO: timeout error is encompassed by HttpDispatchError
+                    // https://github.com/rusoto/rusoto/issues/1530
+                }
+            }
+        }
+        Err(e) => {
+            debug!("part_request error {:?}", e);
+            // TODO: Log error
+
+            // TODO: Send cancellation req to S3? or just let it expire
+
+            // TODO: send cancellation request to main thread
+            // break;
+        }
+    }
+    Ok(())
+}
+
 pub async fn upload_file_multipart(
     config: StorageConfig,
     path: &Path,
@@ -201,8 +253,6 @@ pub async fn upload_file_multipart(
         r => format!("s3.{}.amazonaws.com", r.name()),
     };
 
-    // Constructing url here to avoid borrow errors if we try to construct it at
-    // the bottom of the function
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
 
@@ -210,11 +260,13 @@ pub async fn upload_file_multipart(
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
-    // TODO: submit Content-MD5 also
+    // ======
     // Create multipart upload (to get the upload_id)
+    // ======
     let req = CreateMultipartUploadRequest {
         bucket: config.bucket.clone(),
         key: key.clone(),
+        // TODO: submit Content-MD5 also
         ..Default::default()
     };
     debug!("Making create_multipart_upload request {:?}", req);
@@ -224,7 +276,9 @@ pub async fn upload_file_multipart(
         .upload_id
         .ok_or_else(|| anyhow!("Multipart upload is missing an UploadId"))?;
 
+    // ======
     // Upload parts
+    // ======
     let tokio_file = tokio::fs::File::open(path).await?;
 
     // TODO: determine chunk size based on file size, something like:
@@ -261,51 +315,54 @@ pub async fn upload_file_multipart(
     );
     debug!("Prepared file chunk stream, mapped to UploadPartRequests");
 
-    // TODO: add concurrency to have multiple requests in flight at a time
-    // TODO: spawn N channels and a worker for each channel and distribute requests among them
-    let mut completed_parts: Vec<CompletedPart> = vec![];
-    while let Some(maybe_req) = part_requests.next().await {
-        match maybe_req {
-            Ok(req) => {
-                // TODO: add retry handling?
-                // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
-                // TODO: count some number of retries
-                let part_number = req.part_number;
-                debug!("Making upload_part request {:?}", req);
-                let resp = client.upload_part(req).await;
-                debug!("Result of upload_part {:?}", resp);
-
-                match resp {
-                    Ok(response) => {
-                        if let Some(e_tag) = response.e_tag {
-                            completed_parts.push(CompletedPart {
-                                e_tag: Some(e_tag),
-                                part_number: Some(part_number),
-                            });
-                        } else {
-                            // TODO: raise err
-                        }
-                    }
-                    Err(e) => {
-                        debug!("Response error {:?}", e);
-                        // TODO: retry error types that make sense to, otherwise send cancellation to S3 and ? em
-                        // TODO: timeout error is encompassed by HttpDispatchError
-                        // https://github.com/rusoto/rusoto/issues/1530
-                    }
-                }
-            }
-            Err(e) => {
-                debug!("part_request error {:?}", e);
-                // TODO: Log error
-
-                // TODO: Send cancellation req to S3? or just let it expire
-
-                break;
-            }
-        }
+    // TODO: Make num_workers configurable
+    const NUM_WORKERS: usize = 10;
+    let mut work_senders = vec![];
+    let mut work_receivers = vec![];
+    // TODO: change from mutex to message on channel back to main thread?
+    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+    for _ in 0..NUM_WORKERS {
+        // TODO: bounds of channel determines how much RAM we use... make it configurable
+        let (sender, receiver) = mpsc::channel(10);
+        work_senders.push(sender);
+        work_receivers.push(receiver);
     }
 
+    let futures = FuturesUnordered::new();
+    for mut receiver in work_receivers {
+        let worker_client = client.clone();
+        let worker_completed_parts = completed_parts.clone();
+        let job = tokio::spawn(async move {
+            while let Some(maybe_req) = receiver.recv().await {
+                // TODO: provide a channel for returning errors on instead of doing unwrap here
+                upload_completed_part(&worker_client, maybe_req, &worker_completed_parts)
+                    .await
+                    .unwrap();
+            }
+        });
+        futures.push(job);
+    }
+
+    let mut i = 0;
+    while let Some(maybe_req) = part_requests.next().await {
+        debug!("Sending job {} to worker", i);
+        work_senders[i % NUM_WORKERS].send(maybe_req).await?;
+        // for unbounded: work_senders[i % NUM_WORKERS].send(maybe_req)?;
+        i += 1;
+    }
+    // Drop all channel Senders so Receivers will stop waiting for jobs
+    work_senders.clear();
+
+    // Block until all requests sent
+    debug!("Waiting on futures.collect of {:?}", futures);
+    futures.collect::<Vec<_>>().await;
+
+    // ======
     // Create multipart upload (to get the upload_id)
+    // ======
+    let completed_parts_mutex: Mutex<Vec<CompletedPart>> = Arc::try_unwrap(completed_parts)
+        .map_err(|err| anyhow!("Failed to unwrap Arc of completed_parts: {:?}", err))?;
+    let completed_parts = completed_parts_mutex.into_inner()?;
     let req = CompleteMultipartUploadRequest {
         bucket: config.bucket.clone(),
         key: key.clone(),
@@ -318,141 +375,13 @@ pub async fn upload_file_multipart(
     debug!("Making complete_multipart_upload request {:?}", req);
     let resp = client.complete_multipart_upload(req).await?;
     debug!("Result of complete_multipart_upload {:?}", resp);
-    // Location is s3.us-west-1.amazonaws.com/tangram-vision-datasets/
+    // resp.location is s3.us-west-1.amazonaws.com/tangram-vision-datasets/
     // whereas url is tangram-vision-datasets.s3.us-west-1.amazonaws.com/
-    // So they won't match, but we can just use the url type.
-    // TODO: don't read location
-    let location = resp
-        .location
-        .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
-    debug!("Resulting location {}", location);
-    if let Ok(location_url) = Url::parse(&location) {
-        if location_url != url {
-            debug!(
-                "Returned location {:?} doesn't match expected url {:?}",
-                location_url, url
-            );
-        }
-    } else {
-        debug!("Location didn't parse as a URL! {}", location);
-    }
+    // So they won't match, but we can just use the url value.
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
     debug!("Resulting version {}", version);
-
-    /*
-    let prev_n = CHUNK_SIZE;
-    while let Some(chunk) = chunk_stream.next().await {
-        let FileChunk { data, part_number } = match chunk {
-            Ok(chunk) => chunk,
-            Err(e) => {
-                unimplemented!();
-            }
-        };
-
-        let n = data.len();
-
-        assert!(n <= prev_n);
-
-        prev_n = n;
-        let byte_stream = StreamingBody::from(data);
-
-        // TODO: Send chunk to S3
-    }
-
-    let s = chunk_stream.map(|chunk| {
-        let FileChunk { data, part_number } = match chunk {
-            Ok(chunk) => chunk,
-            Err(e) => {
-                unimplemented!();
-            }
-        };
-
-        let n = data.len();
-
-        assert!(n <= prev_n);
-
-        prev_n = n;
-        let byte_stream = StreamingBody::from(data);
-
-        (byte_stream, part_number);
-        // TODO: Send chunk to S3
-
-        // returns a Request type
-        unimplemented!();
-    });
-    */
-    // .fold(client, |client, request| {
-    //     client.put(request);
-
-    //     client
-    // });
-
-    /*
-    for _ in 0..num_workers {
-        let (sender, receiver) = channel::unbounded();
-
-        work_senders.push(sender);
-        work_receiver.push(receiver);
-    }
-
-    let workers: Vec<channel::Sender> = /* ... */;
-
-    let mut i = 0;
-    while let Some(request) = s.next().await {
-        workers[i].send(request).await?;
-
-        i += 1;
-
-        if i >= workers.len() { i = 0; }
-    }
-
-    // in some other task
-    let workers: Vec<channel::Receiver> = /* ... */ ;
-
-    for worker in workers {
-        let job = task::spawn(async move {
-            let worker = worker;
-            let client = /* ... */;
-
-            while let Some(request) = worker.next().await {
-                client.put(request);
-            }
-        });
-
-        futures_unordered.push(job);
-    }
-
-    while let Some(result) = futures_unordered.next().await {
-        match result {
-            Ok(()) => "succeeded at upload",
-            Err(e) => "failed for reason",
-        }
-    }
-    */
-
-    /*
-    let req = PutObjectRequest {
-        bucket: config.bucket,
-        body: Some(byte_stream),
-        // Required when body is a stream (will change for multipart upload)
-        content_length: Some(filesize),
-        key,
-        ..Default::default()
-    };
-    debug!("making upload_file request {:?}", req);
-    // just spawn tokio here and use it, instead of async-ing everything yet
-    // TODO: use example https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
-    // TODO: another reference https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
-
-    // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
-    let resp = client.put_object(req).await?;
-    debug!("upload_file response {:?}", resp);
-    let version = resp
-        .version_id
-        .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
-    */
 
     Ok((url, version))
 }
@@ -501,8 +430,6 @@ mod tests {
     use super::*;
     use httpmock::Method::GET;
     use httpmock::MockServer;
-    use rand::rngs::ThreadRng;
-    use rand::{Rng, SeedableRng};
     use tokio_test::io::Builder;
 
     #[test]
