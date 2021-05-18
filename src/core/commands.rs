@@ -27,7 +27,7 @@ pub fn create_dataset(config: &DatabaseApiConfig) -> Result<()> {
             "metadata": {"description": "TODO: get from cmdline or prompt"},
         }),
     )?;
-    println!("Created new dataset with UUID: {}", dataset.uuid);
+    println!("Created new dataset with UUID: {}", dataset.dataset_id);
     Ok(())
 }
 
@@ -51,23 +51,27 @@ pub fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Resu
 
 pub fn add_file_to_dataset(
     config: &DatabaseApiConfig,
-    uuid: Uuid,
+    dataset_id: Uuid,
     url: &Url,
     filesize: u64,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<()> {
-    datasets::files_post(config, uuid, url, filesize, version, metadata)?;
+    datasets::files_post(config, dataset_id, url, filesize, version, metadata)?;
     Ok(())
 }
 
-pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<(Url, String, u64)> {
+pub fn upload_file(
+    config: StorageConfig,
+    dataset_id: Uuid,
+    path: &Path,
+) -> Result<(Url, String, u64)> {
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
-    let key = format!("{}/{}", uuid, key);
+    let key = format!("{}/{}", dataset_id, key);
 
     // TODO: change to
     // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
@@ -83,10 +87,10 @@ pub fn upload_file(config: StorageConfig, uuid: Uuid, path: &Path) -> Result<(Ur
 
 pub fn list_files(
     config: &DatabaseApiConfig,
-    dataset_uuid: Uuid,
+    dataset_id: Uuid,
     filename: &str,
 ) -> Result<Vec<UploadedFile>> {
-    let files = datasets::files_get(config, dataset_uuid, filename)?;
+    let files = datasets::files_get(config, dataset_id, filename)?;
 
     Ok(files)
 }
@@ -125,9 +129,9 @@ mod tests {
             .unwrap();
 
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("nonexistent-file");
-        let error = upload_file(storage_config, uuid, path)
+        let error = upload_file(storage_config, dataset_id, path)
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
@@ -147,10 +151,10 @@ mod tests {
             .unwrap();
 
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new(ffi::OsStr::from_bytes(&[128u8]));
-        let error =
-            upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
+        let error = upload_file(storage_config, dataset_id, path)
+            .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Filename is invalid UTF8"),
             "{}",
@@ -169,10 +173,10 @@ mod tests {
             .unwrap();
 
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let uuid = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
+        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("/");
-        let error =
-            upload_file(storage_config, uuid, path).expect_err("Loading bad filename should fail");
+        let error = upload_file(storage_config, dataset_id, path)
+            .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Invalid filename"),
             "{}",
@@ -208,7 +212,7 @@ mod tests {
             ))
             .unwrap();
 
-        let url_str = "https://tangram-datasets.s3.us-east-2.amazonaws.com/test";
+        let url_str = "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/test";
         let url = Url::parse(&url_str).unwrap();
         let error = download_file(config, &url).expect_err("Missing storage config should error");
         assert!(

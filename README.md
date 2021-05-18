@@ -41,6 +41,13 @@ README](https://gitlab.com/tangram-vision/devops/-/tree/greg/postgrest-app/tangr
 and make sure your configuration file has the `database.url` pointed at the
 local API endpoint (e.g. set `url = "http://0.0.0.0:3000"`).
 
+# Configuration
+
+The configuration file is expected at `~/.config/tangram_vision/bolster.toml` by
+default. If you want to run bolster against a particular environment (e.g. dev,
+prod), change the contents of the config file, or have multiple config files and
+switch between them with the `-c`/`--config` CLI option.
+
 # Documentation
 
 This tool is currently WIP. For design documentation, see

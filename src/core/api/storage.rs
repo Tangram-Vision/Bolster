@@ -51,8 +51,8 @@ impl StorageConfig {
                         aws_config.access_key,
                         aws_config.secret_key,
                     ),
-                    bucket: String::from("tangram-datasets"),
-                    region: Region::UsEast2,
+                    bucket: String::from("tangram-vision-datasets"),
+                    region: Region::UsWest1,
                 })
             }
         }

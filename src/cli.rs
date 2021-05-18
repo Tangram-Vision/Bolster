@@ -73,11 +73,9 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 }
             }
 
-            let creator: Option<String> = handle_optional_arg(ls_matches, "creator");
-
             // TODO: implement metadata CLI input
 
-            let uuid: Option<Uuid> = handle_optional_arg(ls_matches, "uuid");
+            let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
@@ -85,10 +83,9 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             let order: Option<DatasetOrdering> = handle_optional_arg(ls_matches, "order");
 
             let get_params = DatasetGetRequest {
-                uuid,
+                dataset_id,
                 before_date,
                 after_date,
-                creator,
                 order,
                 limit,
                 offset,
@@ -103,11 +100,11 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 // TODO: show creator for tangram-internal build
 
                 // If user is listing a single dataset, show its files...
-                if uuid.is_some() {
+                if let Some(dataset_id) = dataset_id {
                     if datasets[0].files.is_empty() {
-                        println!("No files found in dataset {}", datasets[0].uuid.to_string());
+                        println!("No files found in dataset {}", dataset_id.to_string());
                     } else {
-                        println!("Files in dataset {}:\n", datasets[0].uuid.to_string());
+                        println!("Files in dataset {}:\n", dataset_id.to_string());
                         println!("{:<32} {:<12} URL", "Created Datetime", "Filesize",);
                         for f in &datasets[0].files {
                             println!(
@@ -130,7 +127,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                     for d in datasets {
                         println!(
                             "{:<40} {:<32} {:<8} {:<12}",
-                            d.uuid.to_string(),
+                            d.dataset_id.to_string(),
                             d.created_date.to_string(),
                             d.files.len(),
                             Byte::from_bytes(
@@ -145,32 +142,27 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
         }
         Some(("upload", upload_matches)) => {
             // Safe to unwrap because arguments are required or have defaults
-            let dataset_uuid: Uuid = upload_matches.value_of_t_or_exit("dataset_uuid");
+            let dataset_id: Uuid = upload_matches.value_of_t_or_exit("dataset_uuid");
             let input_file = upload_matches.value_of("file").unwrap();
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let (url, version, filesize) =
-                commands::upload_file(storage_config, dataset_uuid, Path::new(input_file))?;
+                commands::upload_file(storage_config, dataset_id, Path::new(input_file))?;
             let metadata = json!({});
             commands::add_file_to_dataset(
-                &db_config,
-                dataset_uuid,
-                &url,
-                filesize,
-                version,
-                metadata,
+                &db_config, dataset_id, &url, filesize, version, metadata,
             )?;
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
-            let dataset_uuid: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
+            let dataset_id: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
             let filename = download_matches.value_of("filename").unwrap();
-            let files = commands::list_files(&db_config, dataset_uuid, filename)?;
+            let files = commands::list_files(&db_config, dataset_id, filename)?;
             if files.is_empty() {
                 return Err(anyhow!(
                     "No files in dataset {} matched the filename {}",
-                    dataset_uuid,
+                    dataset_id,
                     filename
                 ));
             } else {
@@ -225,13 +217,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("before-date")
                         .value_name("DATE")
                         .takes_value(true),
-                    #[cfg(feature = "tangram-internal")]
-                    Arg::new("creator")
-                        .about("Show datasets created by this user")
-                        .short('c')
-                        .long("creator")
-                        .value_name("USERNAME")
-                        .takes_value(true),
                     // TODO: implement metadata
                     Arg::new("metadata")
                         .about("NOT IMPLEMENTED: Show dataset matching metadata")
@@ -239,7 +224,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("metadata")
                         .value_name("???")
                         .takes_value(true),
-                    Arg::new("uuid")
+                    Arg::new("dataset_uuid")
                         .about("Show dataset matching uuid")
                         .short('u')
                         .long("uuid")

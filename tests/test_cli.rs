@@ -44,7 +44,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(
-                "isn't a valid value for 'uuid': invalid length",
+                "isn't a valid value for 'dataset_uuid': invalid length",
             ));
     }
 
@@ -121,14 +121,13 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(GET)
                 .header("Authorization", "Bearer abc")
-                .query_param("uuid", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
+                .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
                 .path("/datasets");
             then.status(200)
                 .header("Content-Type", "application/json")
-                .json_body(json!([{"uuid": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
-                    "created_date": "2021-02-03T21:21:57.713584",
-                    "creator_role": "tangram_user",
-                    "access_role": "tangram_user",
+                .json_body(json!([{
+                    "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "metadata": {
                         "description": "Test"
                     },
@@ -153,36 +152,6 @@ mod tests {
 #[cfg(all(test, feature = "tangram-internal"))]
 mod tests_internal {
     use super::*;
-
-    #[test]
-    fn test_cli_filtering_by_creator_available() {
-        // To debug what rusoto and httpmock are doing, enable logger and run
-        // tests with debug or trace level.
-        // let _ = env_logger::try_init();
-
-        let server = MockServer::start();
-        let mock = server.mock(|when, then| {
-            when.method(GET)
-                .header("Authorization", "Bearer abc")
-                .query_param("creator_role", "eq.tangram_user")
-                .path("/datasets");
-            then.status(200)
-                .header("Content-Type", "application/json")
-                .json_body(json!([]));
-        });
-
-        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-
-        cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
-            .arg("ls")
-            .arg("--creator=tangram_user")
-            .env("BOLSTER__DATABASE__URL", server.base_url())
-            .assert()
-            .success()
-            .stdout(predicate::str::contains("No datasets found!"));
-        mock.assert();
-    }
 
     #[test]
     fn test_cli_digitalocean_provider_available() {

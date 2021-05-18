@@ -12,11 +12,9 @@ use uuid::Uuid;
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Dataset {
     /// Note: This is a Primary Key.<pk/>
-    pub uuid: Uuid,
+    pub dataset_id: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    pub creator_role: String,
-    pub access_role: String,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
@@ -27,11 +25,9 @@ pub struct Dataset {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct DatasetNoFiles {
     /// Note: This is a Primary Key.<pk/>
-    pub uuid: Uuid,
+    pub dataset_id: Uuid,
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    pub creator_role: String,
-    pub access_role: String,
     /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
     /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
     /// How does the user provide this metadata? Good question.
@@ -40,11 +36,12 @@ pub struct DatasetNoFiles {
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct UploadedFile {
-    pub uuid: Uuid,
+    // Don't need to reference this value anywhere, so ignoring it
+    // pub file_id: Uuid,
+    pub dataset_id: Uuid,
+
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    // Not needed in CLI, exists in database for record-keeping
-    // pub creator_role: String,
     pub url: Url,
     pub filesize: u64,
     // Likely unused, requesting the url w/o version downloads the latest version
@@ -52,35 +49,14 @@ pub struct UploadedFile {
     pub metadata: serde_json::Value,
 }
 
-/*
-impl Dataset {
-    pub fn new(
-        uuid: String,
-        created_date: DateTime<Utc>,
-        creator_role: String,
-        access_role: String,
-        url: Url,
-        metadata: serde_json::Value,
-    ) -> Dataset {
-        Dataset {
-            uuid,
-            created_date,
-            creator_role,
-            access_role,
-            url,
-            metadata,
-        }
-    }
-}
-*/
-
 // https://serde.rs/custom-date-format.html
 mod notz_rfc_3339 {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer};
     // use serde::{self, Deserialize, Deserializer, Serializer};
 
-    const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f";
+    // Example: 2021-05-06T23:54:45.626411+00:00
+    const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f%:z";
 
     // The signature of a serialize_with function must follow the pattern:
     //

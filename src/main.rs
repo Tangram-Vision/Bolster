@@ -46,7 +46,7 @@ fn main() -> Result<()> {
         settings.merge(config::File::with_name(config_file))?;
     } else {
         settings.merge(config::File::with_name(&shellexpand::tilde(
-            "~/.config/tangramvision/bolster.toml",
+            "~/.config/tangram_vision/bolster.toml",
         )))?;
     }
 
