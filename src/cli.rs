@@ -45,7 +45,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
 
     // Derive config needed for all commands (they all interact with the database)
     let db = config.clone().try_into::<DatabaseConfig>()?.database;
-    let db_config = DatabaseApiConfig::new(db.url, db.jwt)?;
+    let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone())?;
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
@@ -147,8 +147,9 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
             let storage_config = storage::StorageConfig::new(config, provider)?;
+            let prefix = db.user_id_from_jwt()?.to_string();
             let (url, version, filesize) =
-                commands::upload_file(storage_config, dataset_id, Path::new(input_file))?;
+                commands::upload_file(storage_config, dataset_id, Path::new(input_file), &prefix)?;
             let metadata = json!({});
             commands::add_file_to_dataset(
                 &db_config, dataset_id, &url, filesize, version, metadata,

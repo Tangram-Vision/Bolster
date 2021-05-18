@@ -120,7 +120,7 @@ mod tests {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
-                .header("Authorization", "Bearer abc")
+                .header("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiODA3Y2ZmZTUtZGY2ZC00MzRhLTg2YTQtZDAwN2NkNzQ2YmQzIn0.761nFCTaAsLnU-VaUrLDMNKL6VffxEL9acYbYIaT7tQ")
                 .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
                 .path("/datasets");
             then.status(200)
