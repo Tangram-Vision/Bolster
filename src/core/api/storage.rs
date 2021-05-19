@@ -8,7 +8,7 @@
 use anyhow::{anyhow, bail, Result};
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::stream::TryStreamExt;
-use futures::stream::{unfold, Stream, StreamExt};
+use futures::stream::{try_unfold, Stream, StreamExt};
 use log::debug;
 use reqwest::Url;
 use rusoto_core::{request, Region};
@@ -161,7 +161,7 @@ where
         "Constructed unfold seed with filesize={}: {:?}",
         filesize, seed
     );
-    Box::pin(unfold(seed, |mut state| async move {
+    Box::pin(try_unfold(seed, |mut state| async move {
         // f.read_exact fills the buffer, but throws UnexpectedEof if it reads
         // less than the size of the buffer, so we need to match the buffer size
         // to what we expect to read
@@ -175,9 +175,9 @@ where
         // Previously tried f.read, but it only returns 8KB at a time
         // Relevant? https://github.com/tokio-rs/tokio/issues/3694#issuecomment-826957113
         // match state.f.read(&mut buf).await {
-        match state.f.read_exact(&mut buf).await {
-            Ok(0) => None,
-            Ok(n) => {
+        match state.f.read_exact(&mut buf).await? {
+            0 => Ok(None),
+            n => {
                 debug!("Read n={} bytes from file {:?}", n, state.f);
                 buf.resize(n, 0);
                 let chunk = FileChunk {
@@ -188,67 +188,135 @@ where
                 state.part_number += 1;
                 state.remaining_bytes -= n;
 
-                Some((Ok(chunk), state))
+                Ok(Some((chunk, state)))
             }
-            // TODO: test different kinds of io errors, be able to disambiguate EOF which isn't really an error
-            Err(e) => Some((Err(e), state)),
         }
     }))
 }
 
 async fn upload_completed_part(
     client: &S3Client,
-    maybe_req: std::io::Result<UploadPartRequest>,
+    req: UploadPartRequest,
     completed_parts: &Arc<Mutex<Vec<CompletedPart>>>,
 ) -> Result<()> {
-    match maybe_req {
-        Ok(req) => {
-            // TODO: add retry handling?
-            // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
-            // TODO: count some number of retries
-            let part_number = req.part_number;
-            debug!("Making part {} upload_part request {:?}", part_number, req);
-            let resp = client.upload_part(req).await;
-            debug!("Result of part {} upload_part {:?}", part_number, resp);
+    // TODO: add retry handling?
+    // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
+    // TODO: count some number of retries
+    let part_number = req.part_number;
+    debug!("Making part {} upload_part request {:?}", part_number, req);
+    let resp = client.upload_part(req).await;
+    debug!("Result of part {} upload_part {:?}", part_number, resp);
 
-            match resp {
-                Ok(response) => {
-                    if let Some(e_tag) = response.e_tag {
-                        // TODO: send completed parts back on channel or use mutex?
-                        let mut cp = completed_parts.lock().unwrap();
-                        cp.push(CompletedPart {
-                            e_tag: Some(e_tag),
-                            part_number: Some(part_number),
-                        });
-                    } else {
-                        bail!(
-                            "Response for upload part {} is missing ETag header!",
-                            part_number
-                        );
-                    }
-                }
-                Err(e) => {
-                    // TODO: timeout error is encompassed by HttpDispatchError
-                    // https://github.com/rusoto/rusoto/issues/1530
-                    bail!("Upload part {} request failed: {}", part_number, e);
-                }
+    match resp {
+        Ok(response) => {
+            if let Some(e_tag) = response.e_tag {
+                // TODO: send completed parts back on channel or use mutex?
+                let mut cp = completed_parts.lock().unwrap();
+                cp.push(CompletedPart {
+                    e_tag: Some(e_tag),
+                    part_number: Some(part_number),
+                });
+            } else {
+                bail!(
+                    "Response for upload part {} is missing ETag header!",
+                    part_number
+                );
             }
         }
         Err(e) => {
-            debug!("part_request error {:?}", e);
-            bail!("Got err UploadPartRequest: {}", e);
-            // TODO: Log error
-
-            // TODO: Send cancellation req to S3? or just let it expire
-
-            // TODO: send cancellation request to main thread?
-            // TODO: change to try_unfold when reading chunks so failures exit early
-            // TODO: change to try_unfold when reading chunks so failures exit early
-            // TODO: change to try_unfold when reading chunks so failures exit early
-            // break;
+            // TODO: timeout error is encompassed by HttpDispatchError
+            // https://github.com/rusoto/rusoto/issues/1530
+            bail!("Upload part {} request failed: {}", part_number, e);
         }
     }
     Ok(())
+}
+
+async fn upload_parts<F>(
+    client: &S3Client,
+    tokio_file: F,
+    bucket: String,
+    key: String,
+    upload_id: &str,
+    filesize: i64,
+    // TODO: bundle these in a config object?
+    chunk_size: usize,
+    num_workers: usize,
+) -> Result<Arc<Mutex<Vec<CompletedPart>>>>
+where
+    F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
+{
+    // TODO: Could this be simpler as tokio_file.
+    let mut part_requests = read_file_chunks(tokio_file, chunk_size, filesize as usize).map_ok(
+        |chunk: FileChunk| -> UploadPartRequest {
+            // Prints vec of bytes:
+            // debug!("Got chunk: {:?}", chunk);
+
+            debug!(
+                "Constructing chunk {} with data of size {}",
+                chunk.part_number,
+                chunk.data.len()
+            );
+            let streaming_body = StreamingBody::from(chunk.data);
+            let part_number = chunk.part_number;
+            UploadPartRequest {
+                body: Some(streaming_body),
+                bucket: bucket.clone(),
+                key: key.clone(),
+                upload_id: upload_id.to_owned(),
+                part_number,
+                ..Default::default()
+            }
+        },
+    );
+    debug!("Prepared file chunk stream, mapped to UploadPartRequests");
+
+    let mut work_senders = vec![];
+    let mut work_receivers = vec![];
+    // TODO: change from mutex to message on channel back to main thread?
+    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+    for _ in 0..num_workers {
+        // TODO: bounds of channel determines how much RAM we use... make it configurable
+        let (sender, receiver) = mpsc::channel(10);
+        work_senders.push(sender);
+        work_receivers.push(receiver);
+    }
+
+    let futures = FuturesUnordered::new();
+    for mut receiver in work_receivers {
+        let worker_client = client.clone();
+        let worker_completed_parts = completed_parts.clone();
+        let job = tokio::spawn(async move {
+            while let Some(req) = receiver.recv().await {
+                // TODO: provide a channel for returning errors on instead of doing unwrap here
+                upload_completed_part(&worker_client, req, &worker_completed_parts)
+                    .await
+                    .unwrap();
+            }
+        });
+        futures.push(job);
+    }
+
+    let mut i = 0;
+    while let Some(maybe_req) = part_requests.next().await {
+        if let Ok(req) = maybe_req {
+            debug!("Sending job {} to worker", i);
+            work_senders[i % num_workers].send(req).await?;
+            // for unbounded: work_senders[i % num_workers].send(maybe_req)?;
+            i += 1;
+        } else {
+            bail!("Error reading file: {:?}", maybe_req);
+        }
+    }
+    // Drop all channel Senders so Receivers will stop waiting for jobs
+    work_senders.clear();
+
+    // Block until all requests sent
+    debug!("Waiting on futures.collect of {:?}", futures);
+    futures.collect::<Vec<_>>().await;
+    // TODO: can this return completed parts instead of using arc-mutex-vec?
+
+    Ok(completed_parts)
 }
 
 // Multipart upload references
@@ -292,83 +360,27 @@ pub async fn upload_file_multipart(
     // ======
     // Upload parts
     // ======
-    let tokio_file = tokio::fs::File::open(path).await?;
-
     // TODO: determine chunk size based on file size, something like:
     // chunk_size = max(25MB, ceil(filesize / 1000))
     // after 25GB file size, all uploads use 1000 parts
     // Could use more parts, but 10_000 etags in the complete_multipart_upload request seems excessive
     // discussion: https://stackoverflow.com/a/46564791
     const CHUNK_SIZE: usize = 5 * 1024 * 1024;
-
-    let bucket = config.bucket.clone();
-    // TODO: Could this be simpler as tokio_file.
-    let mut part_requests = read_file_chunks(tokio_file, CHUNK_SIZE, filesize as usize).map(
-        |maybe_chunk| -> Result<UploadPartRequest, std::io::Error> {
-            // Prints vec of bytes:
-            // debug!("Got maybe_chunk: {:?}", maybe_chunk);
-            let chunk = maybe_chunk?;
-
-            debug!(
-                "Constructing chunk {} with data of size {}",
-                chunk.part_number,
-                chunk.data.len()
-            );
-            let streaming_body = StreamingBody::from(chunk.data);
-            let part_number = chunk.part_number;
-            Ok(UploadPartRequest {
-                body: Some(streaming_body),
-                bucket: bucket.clone(),
-                key: key.clone(),
-                upload_id: upload_id.clone(),
-                part_number,
-                ..Default::default()
-            })
-        },
-    );
-    debug!("Prepared file chunk stream, mapped to UploadPartRequests");
-
     // TODO: Make num_workers configurable
     const NUM_WORKERS: usize = 10;
-    let mut work_senders = vec![];
-    let mut work_receivers = vec![];
-    // TODO: change from mutex to message on channel back to main thread?
-    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
-    for _ in 0..NUM_WORKERS {
-        // TODO: bounds of channel determines how much RAM we use... make it configurable
-        let (sender, receiver) = mpsc::channel(10);
-        work_senders.push(sender);
-        work_receivers.push(receiver);
-    }
 
-    let futures = FuturesUnordered::new();
-    for mut receiver in work_receivers {
-        let worker_client = client.clone();
-        let worker_completed_parts = completed_parts.clone();
-        let job = tokio::spawn(async move {
-            while let Some(maybe_req) = receiver.recv().await {
-                // TODO: provide a channel for returning errors on instead of doing unwrap here
-                upload_completed_part(&worker_client, maybe_req, &worker_completed_parts)
-                    .await
-                    .unwrap();
-            }
-        });
-        futures.push(job);
-    }
-
-    let mut i = 0;
-    while let Some(maybe_req) = part_requests.next().await {
-        debug!("Sending job {} to worker", i);
-        work_senders[i % NUM_WORKERS].send(maybe_req).await?;
-        // for unbounded: work_senders[i % NUM_WORKERS].send(maybe_req)?;
-        i += 1;
-    }
-    // Drop all channel Senders so Receivers will stop waiting for jobs
-    work_senders.clear();
-
-    // Block until all requests sent
-    debug!("Waiting on futures.collect of {:?}", futures);
-    futures.collect::<Vec<_>>().await;
+    let tokio_file = tokio::fs::File::open(path).await?;
+    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = upload_parts(
+        &client,
+        tokio_file,
+        config.bucket.clone(),
+        key.clone(),
+        &upload_id,
+        filesize,
+        CHUNK_SIZE,
+        NUM_WORKERS,
+    )
+    .await?;
 
     // ======
     // Create multipart upload (to get the upload_id)
@@ -550,6 +562,41 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_read_file_chunks_error_exits_early() {
+        // I switched read_file_chunks from unfold to try_unfold, so now the
+        // stream should exit early with an error if it encounters one, rather
+        // than continuing to read the rest of the file.
+        let _ = env_logger::try_init();
+
+        let reader = Builder::new()
+            .read_error(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "damn",
+            ))
+            .build();
+
+        let chunk_size = 8;
+        let filesize = 10;
+        let mut part_requests = read_file_chunks(reader, chunk_size, filesize);
+
+        let r1 = part_requests
+            .try_next()
+            .await
+            .expect_err("Expected error on first read");
+        assert!(predicate::str::contains("damn").eval(&r1.to_string()));
+        let r2 = part_requests
+            .try_next()
+            .await
+            .expect("Expected Ok(None) from subsequent reads");
+        assert!(r2.is_none());
+        let r3 = part_requests
+            .try_next()
+            .await
+            .expect("Expected Ok(None) from subsequent reads");
+        assert!(r3.is_none());
+    }
+
+    #[tokio::test]
     async fn test_read_file_chunks_read_smaller_than_chunk() {
         let mock_string = String::from("ohno");
         let reader = Builder::new()
@@ -588,15 +635,15 @@ mod tests {
             Default::default(),
         );
         let body: Vec<u8> = vec![1, 2, 3];
-        let maybe_req = Ok(UploadPartRequest {
+        let req = UploadPartRequest {
             body: Some(StreamingBody::from(body)),
             bucket: "test".to_owned(),
             key: "test".to_owned(),
             upload_id: "test".to_owned(),
             part_number: 1,
             ..Default::default()
-        });
-        upload_completed_part(&client, maybe_req, &completed_parts)
+        };
+        upload_completed_part(&client, req, &completed_parts)
             .await
             .unwrap();
         let parts = completed_parts.lock().unwrap();
@@ -623,15 +670,15 @@ mod tests {
             Default::default(),
         );
         let body: Vec<u8> = vec![1, 2, 3];
-        let maybe_req = Ok(UploadPartRequest {
+        let req = UploadPartRequest {
             body: Some(StreamingBody::from(body)),
             bucket: "test".to_owned(),
             key: "test".to_owned(),
             upload_id: "test".to_owned(),
             part_number: 1,
             ..Default::default()
-        });
-        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+        };
+        let e = upload_completed_part(&client, req, &completed_parts)
             .await
             .unwrap_err()
             .to_string();
@@ -656,18 +703,18 @@ mod tests {
             Default::default(),
         );
         let body: Vec<u8> = vec![1, 2, 3];
-        let maybe_req = Ok(UploadPartRequest {
+        let req = UploadPartRequest {
             body: Some(StreamingBody::from(body)),
             bucket: "test".to_owned(),
             key: "test".to_owned(),
             upload_id: "test".to_owned(),
             part_number: 1,
             ..Default::default()
-        });
+        };
 
         // First request will fail with HttpDispatchError (can indicate a timeout).
         // Function should retry and succeed on second request.
-        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+        let e = upload_completed_part(&client, req, &completed_parts)
             .await
             .unwrap_err()
             .to_string();
@@ -679,34 +726,17 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upload_completed_part_err_uploadpartrequest() {
-        let _ = env_logger::try_init();
-
-        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
-        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
-        let client = S3Client::new_with(
-            MockRequestDispatcher::default().with_body("blah"),
-            MockCredentialsProvider,
-            Default::default(),
-        );
-        let maybe_req = Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "it broke!",
-        ));
-
-        // First request will fail with HttpDispatchError (can indicate a timeout).
-        // Function should retry and succeed on second request.
-        let e = upload_completed_part(&client, maybe_req, &completed_parts)
-            .await
-            .unwrap_err()
-            .to_string();
-        assert_eq!(true, predicate::str::contains("it broke!").eval(&e));
-        assert_eq!(completed_parts.lock().unwrap().len(), 0);
-    }
-
-    #[tokio::test]
     async fn test_upload_completed_part_chunk_err_exits_early() {
+        // Error reading file throws immediately
         let _ = env_logger::try_init();
+
+        let reader = Builder::new()
+            .read("ohno".as_bytes())
+            .read_error(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "Reading file failed",
+            ))
+            .build();
 
         let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -715,23 +745,27 @@ mod tests {
             MockCredentialsProvider,
             Default::default(),
         );
-        let maybe_req = Err(std::io::Error::new(
-            std::io::ErrorKind::UnexpectedEof,
-            "it broke!",
-        ));
 
-        // First request will fail with HttpDispatchError (can indicate a timeout).
-        // Function should retry and succeed on second request.
-        let e = upload_completed_part(&client, maybe_req, &completed_parts)
-            .await
-            .unwrap_err()
-            .to_string();
-        assert_eq!(true, predicate::str::contains("it broke!").eval(&e));
+        let e = upload_parts(
+            &client,
+            reader,
+            "test".to_owned(),
+            "test".to_owned(),
+            "test",
+            8,
+            4,
+            2,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert_eq!(
+            true,
+            predicate::str::contains("Reading file failed").eval(&e)
+        );
         assert_eq!(completed_parts.lock().unwrap().len(), 0);
     }
     // TODO: tests
-    // maybe_req is err (is upload_completed_part the right spot to handle this? or should it receive req instead of maybe_req?)
-    // test that chunk err should stop the unfold (switch to try_unfold)
     // response non-200
 
     // TODO: test that errors coming out of upload_completed_part actually error out of the upload process (stop all workers/tasks)
