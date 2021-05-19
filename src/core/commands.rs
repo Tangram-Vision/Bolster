@@ -71,7 +71,6 @@ pub async fn upload_file(
     path: &Path,
     prefix: &str,
 ) -> Result<()> {
-    // TODO: async version of this?
     let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
     const MULTIPART_FILESIZE_THRESHOLD: i64 = 20 * 1024 * 1024;
     let key = path
@@ -100,16 +99,10 @@ pub async fn upload_file(
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata)?;
     }
 
-    // TODO: make the upload request multipart
-    // reference https://docs.rs/s3-ext/0.2.2/s3_ext/trait.S3Ext.html#tymethod.upload_from_file_multipart
-    //   worried about source.read for each part... what if it doesn't read enough to fill the body all the way to part_size?
-    //   nothing preventing loading the whole file into RAM
-    // reference https://stackoverflow.com/questions/66558012/rust-aws-multipart-upload-using-rusoto-multithreaded-rayon-panicked-at-there
-    //   nothing preventing loading the whole file into RAM
-    // use https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf just change from String to Bytes
-
     // TODO: add progress bar for upload/download
     // TODO: spawn upload/download task with channel back to "main" task, which receives progress updates (that it can print to stdout) until upload/download task ends
+
+    // TODO: trigger calibration pipeline after all files have uploaded successfully
 
     Ok(())
 }
@@ -144,11 +137,9 @@ pub fn print_config(config: config::Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi;
-    use std::os::unix::ffi::OsStrExt;
+    use crate::app_config::{DatabaseConfig, StorageProviderChoices};
+    use crate::core::api::datasets::DatabaseApiConfig;
 
-    // TODO: fix
-    /*
     #[test]
     fn test_upload_missing_file() {
         let mut config = config::Config::default();
@@ -159,37 +150,20 @@ mod tests {
             ))
             .unwrap();
 
+        let db = config
+            .clone()
+            .try_into::<DatabaseConfig>()
+            .unwrap()
+            .database;
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone()).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("nonexistent-file");
         let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[test]
-    fn test_upload_invalid_filename_utf8() {
-        let mut config = config::Config::default();
-        config
-            .merge(config::File::from_str(
-                include_str!("../resources/test_full_config.toml"),
-                config::FileFormat::Toml,
-            ))
-            .unwrap();
-
-        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
-        let path = Path::new(ffi::OsStr::from_bytes(&[128u8]));
-        let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
-            .expect_err("Loading bad filename should fail");
-        assert!(
-            error.to_string().contains("Filename is invalid UTF8"),
             "{}",
             error.to_string()
         );
@@ -205,11 +179,17 @@ mod tests {
             ))
             .unwrap();
 
+        let db = config
+            .clone()
+            .try_into::<DatabaseConfig>()
+            .unwrap()
+            .database;
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone()).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("/");
         let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Invalid filename"),
@@ -255,5 +235,4 @@ mod tests {
             error.to_string()
         );
     }
-    */
 }

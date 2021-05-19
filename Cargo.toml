@@ -63,4 +63,5 @@ features = ["json", "blocking", "native-tls"]
 assert_cmd = "1.0"
 httpmock = "0.5"
 predicates = "1.0"
+rusoto_mock = "0.46"
 tokio-test = "0.4"

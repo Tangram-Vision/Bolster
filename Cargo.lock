@@ -397,6 +397,7 @@ dependencies = [
  "reqwest",
  "rusoto_core",
  "rusoto_credential",
+ "rusoto_mock",
  "rusoto_s3",
  "serde 1.0.126",
  "serde_json",
@@ -2140,6 +2141,21 @@ dependencies = [
  "shlex",
  "tokio 1.5.0",
  "zeroize",
+]
+
+[[package]]
+name = "rusoto_mock"
+version = "0.46.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ab46f26601e8c5663d9a1f973b90748c2e625b0dd08c22c4a6f9dc15dbe9118"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "futures",
+ "http",
+ "rusoto_core",
+ "serde 1.0.126",
+ "serde_json",
 ]
 
 [[package]]

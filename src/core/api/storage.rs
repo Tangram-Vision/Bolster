@@ -5,7 +5,7 @@
 
 // TODO: extract common code between aws/digitalocean
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::stream::TryStreamExt;
 use futures::stream::{unfold, Stream, StreamExt};
@@ -75,6 +75,11 @@ impl StorageConfig {
     }
 }
 
+// Async oneshot upload references
+// https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
+// https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
+// https://github.com/rusoto/rusoto/issues/1771
+// https://stackoverflow.com/questions/59318460/what-is-the-best-way-to-convert-an-asyncread-to-a-trystream-of-bytes
 pub async fn upload_file_oneshot(
     config: StorageConfig,
     path: &Path,
@@ -108,8 +113,6 @@ pub async fn upload_file_oneshot(
     };
     debug!("making upload_file request {:?}", req);
     // just spawn tokio here and use it, instead of async-ing everything yet
-    // TODO: use example https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
-    // TODO: another reference https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
 
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
@@ -218,30 +221,40 @@ async fn upload_completed_part(
                             part_number: Some(part_number),
                         });
                     } else {
-                        // TODO: raise err
+                        bail!(
+                            "Response for upload part {} is missing ETag header!",
+                            part_number
+                        );
                     }
                 }
                 Err(e) => {
-                    debug!("Response error {:?}", e);
-                    // TODO: retry error types that make sense to, otherwise send cancellation to S3 and ? em
                     // TODO: timeout error is encompassed by HttpDispatchError
                     // https://github.com/rusoto/rusoto/issues/1530
+                    bail!("Upload part {} request failed: {}", part_number, e);
                 }
             }
         }
         Err(e) => {
             debug!("part_request error {:?}", e);
+            bail!("Got err UploadPartRequest: {}", e);
             // TODO: Log error
 
             // TODO: Send cancellation req to S3? or just let it expire
 
-            // TODO: send cancellation request to main thread
+            // TODO: send cancellation request to main thread?
+            // TODO: change to try_unfold when reading chunks so failures exit early
+            // TODO: change to try_unfold when reading chunks so failures exit early
+            // TODO: change to try_unfold when reading chunks so failures exit early
             // break;
         }
     }
     Ok(())
 }
 
+// Multipart upload references
+// https://docs.rs/s3-ext/0.2.2/s3_ext/trait.S3Ext.html#tymethod.upload_from_file_multipart
+// https://stackoverflow.com/questions/66558012/rust-aws-multipart-upload-using-rusoto-multithreaded-rayon-panicked-at-there
+// https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf
 pub async fn upload_file_multipart(
     config: StorageConfig,
     path: &Path,
@@ -430,6 +443,8 @@ mod tests {
     use super::*;
     use httpmock::Method::GET;
     use httpmock::MockServer;
+    use predicates::prelude::*;
+    use rusoto_mock::{MockCredentialsProvider, MockRequestDispatcher};
     use tokio_test::io::Builder;
 
     #[test]
@@ -534,7 +549,6 @@ mod tests {
         }
     }
 
-    #[ignore]
     #[tokio::test]
     async fn test_read_file_chunks_read_smaller_than_chunk() {
         let mock_string = String::from("ohno");
@@ -547,7 +561,7 @@ mod tests {
         let filesize = 8;
 
         let expected_parts: [i64; 2] = [1, 2];
-        let expected_chunks = vec!["ohnooh".as_bytes(), "oh".as_bytes()];
+        let expected_chunks = vec!["ohnooh".as_bytes(), "no".as_bytes()];
 
         let mut s = read_file_chunks(reader, chunk_size, filesize);
         let mut i = 0;
@@ -559,4 +573,171 @@ mod tests {
         }
         assert_eq!(i, 2);
     }
+
+    #[tokio::test]
+    async fn test_upload_completed_part_success() {
+        let _ = env_logger::try_init();
+
+        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::default()
+                .with_body("blah")
+                .with_header("ETag", "testvalue"),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+        let body: Vec<u8> = vec![1, 2, 3];
+        let maybe_req = Ok(UploadPartRequest {
+            body: Some(StreamingBody::from(body)),
+            bucket: "test".to_owned(),
+            key: "test".to_owned(),
+            upload_id: "test".to_owned(),
+            part_number: 1,
+            ..Default::default()
+        });
+        upload_completed_part(&client, maybe_req, &completed_parts)
+            .await
+            .unwrap();
+        let parts = completed_parts.lock().unwrap();
+        debug!("Parts length: {}", parts.len());
+        assert_eq!(parts.len(), 1);
+        assert_eq!(
+            parts[0],
+            CompletedPart {
+                e_tag: Some("testvalue".to_owned()),
+                part_number: Some(1)
+            }
+        );
+    }
+
+    #[tokio::test]
+    async fn test_upload_completed_part_missing_etag() {
+        let _ = env_logger::try_init();
+
+        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::default().with_body("blah"),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+        let body: Vec<u8> = vec![1, 2, 3];
+        let maybe_req = Ok(UploadPartRequest {
+            body: Some(StreamingBody::from(body)),
+            bucket: "test".to_owned(),
+            key: "test".to_owned(),
+            upload_id: "test".to_owned(),
+            part_number: 1,
+            ..Default::default()
+        });
+        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            true,
+            predicate::str::contains("Response for upload part 1 is missing ETag header!").eval(&e)
+        );
+        assert_eq!(completed_parts.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_upload_completed_part_timeout() {
+        let _ = env_logger::try_init();
+
+        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::with_dispatch_error(
+                rusoto_core::request::HttpDispatchError::new("my timeout message".to_owned()),
+            ),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+        let body: Vec<u8> = vec![1, 2, 3];
+        let maybe_req = Ok(UploadPartRequest {
+            body: Some(StreamingBody::from(body)),
+            bucket: "test".to_owned(),
+            key: "test".to_owned(),
+            upload_id: "test".to_owned(),
+            part_number: 1,
+            ..Default::default()
+        });
+
+        // First request will fail with HttpDispatchError (can indicate a timeout).
+        // Function should retry and succeed on second request.
+        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(
+            true,
+            predicate::str::contains("my timeout message").eval(&e)
+        );
+        assert_eq!(completed_parts.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_upload_completed_part_err_uploadpartrequest() {
+        let _ = env_logger::try_init();
+
+        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::default().with_body("blah"),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+        let maybe_req = Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "it broke!",
+        ));
+
+        // First request will fail with HttpDispatchError (can indicate a timeout).
+        // Function should retry and succeed on second request.
+        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(true, predicate::str::contains("it broke!").eval(&e));
+        assert_eq!(completed_parts.lock().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn test_upload_completed_part_chunk_err_exits_early() {
+        let _ = env_logger::try_init();
+
+        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::default().with_body("blah"),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+        let maybe_req = Err(std::io::Error::new(
+            std::io::ErrorKind::UnexpectedEof,
+            "it broke!",
+        ));
+
+        // First request will fail with HttpDispatchError (can indicate a timeout).
+        // Function should retry and succeed on second request.
+        let e = upload_completed_part(&client, maybe_req, &completed_parts)
+            .await
+            .unwrap_err()
+            .to_string();
+        assert_eq!(true, predicate::str::contains("it broke!").eval(&e));
+        assert_eq!(completed_parts.lock().unwrap().len(), 0);
+    }
+    // TODO: tests
+    // maybe_req is err (is upload_completed_part the right spot to handle this? or should it receive req instead of maybe_req?)
+    // test that chunk err should stop the unfold (switch to try_unfold)
+    // response non-200
+
+    // TODO: test that errors coming out of upload_completed_part actually error out of the upload process (stop all workers/tasks)
+
+    // TODO: test create_multipart_upload failing with Credentials type RusotoError
+    // https://docs.rs/rusoto_core/0.46.0/rusoto_core/enum.RusotoError.html
+
+    // TODO: test if maybe_chunk is Err
 }
