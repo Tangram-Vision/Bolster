@@ -95,7 +95,8 @@ pub async fn upload_file(
             "Filesize {} > threshold {} so doing multipart",
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
-        let (url, version) = storage::upload_file_multipart(config, path, filesize, key).await?;
+        let (url, version) =
+            storage::upload_file_multipart(config, path, filesize as usize, key).await?;
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata)?;
     }

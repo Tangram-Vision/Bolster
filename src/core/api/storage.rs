@@ -21,7 +21,6 @@ use rusoto_s3::{
 use std::cmp::min;
 use std::path::Path;
 use tokio::fs::File;
-use tokio::sync::mpsc;
 // TODO: clean up imports
 use tokio::io;
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -232,7 +231,7 @@ async fn upload_parts<F>(
     bucket: String,
     key: String,
     upload_id: &str,
-    filesize: i64,
+    filesize: usize,
     // TODO: bundle these in a config object?
     chunk_size: usize,
     concurrent_request_limit: usize,
@@ -334,7 +333,7 @@ where
 pub async fn upload_file_multipart(
     config: StorageConfig,
     path: &Path,
-    filesize: i64,
+    filesize: usize,
     key: String,
 ) -> Result<(Url, String)> {
     let region_endpoint = match &config.region {
