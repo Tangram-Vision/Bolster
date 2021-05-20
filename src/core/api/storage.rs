@@ -218,6 +218,7 @@ async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Res
             }
         }
         Err(e) => {
+            debug!("Handling error in upload_completed_part: {}", e);
             // TODO: timeout error is encompassed by HttpDispatchError
             // https://github.com/rusoto/rusoto/issues/1530
             bail!("Upload part {} request failed: {}", part_number, e);
@@ -234,7 +235,7 @@ async fn upload_parts<F>(
     filesize: i64,
     // TODO: bundle these in a config object?
     chunk_size: usize,
-    num_workers: usize,
+    concurrent_request_limit: usize,
 ) -> Result<Vec<CompletedPart>>
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
@@ -263,61 +264,67 @@ where
         },
     );
 
-    debug!("Prepared file chunk stream, mapped to UploadPartRequests");
-    let mut work_senders = vec![];
-    let mut work_receivers = vec![];
-    for _ in 0..num_workers {
-        // TODO: bounds of channel determines how much RAM we use... make it configurable
-        let (sender, receiver) = mpsc::channel(10);
-        work_senders.push(sender);
-        work_receivers.push(receiver);
-    }
+    // The below async work could be changed to a functional approach, see:
+    // https://gitlab.com/tangram-vision/bolster/-/merge_requests/10#note_581407198
 
-    let mut futures = work_receivers
-        .into_iter() // takes ownership, so receiver is moved into task
-        .map(|mut receiver| {
-            let worker_client = client.clone();
-            tokio::spawn(async move {
-                let mut parts = vec![];
-                while let Some(req) = receiver.recv().await {
-                    let part = upload_completed_part(&worker_client, req).await?;
-                    parts.push(part);
-                }
-                Ok::<Vec<CompletedPart>, anyhow::Error>(parts)
-            })
-        })
-        .collect::<FuturesUnordered<_>>();
-
-    // TODO: spawn a task for this (make higher type, b/c everything in FuturesUnordered needs same return type)
-    let mut i = 0;
+    // Tokio threadpool spawns a thread per CPU and distributes tasks among
+    // available threads, so tasks should be completed as fast as possible. We
+    // use the concurrent_request_limit to limit how much of the file we read
+    // into RAM at a time (having no limit leads to system freezes and
+    // OOM-killing).
+    let mut futs = FuturesUnordered::new();
+    let mut parts: Vec<CompletedPart> = Vec::new();
+    // Pool of S3Client clones that are checked-out and checked-in by each task.
+    let mut client_pool: Vec<S3Client> = (0..concurrent_request_limit)
+        .map(|_idx| client.clone())
+        .collect();
     while let Some(maybe_req) = part_requests.next().await {
         if let Ok(req) = maybe_req {
-            debug!("Sending job {} to worker", i);
-            work_senders[i % num_workers].send(req).await?;
-            // for unbounded: work_senders[i % num_workers].send(maybe_req)?;
-            i += 1;
+            debug!("Sending req {} to task", req.part_number);
+            if let Some(local_client) = client_pool.pop() {
+                futs.push(tokio::spawn(async move {
+                    debug!("Spawned task for req {}", req.part_number);
+                    let part: Result<CompletedPart> =
+                        upload_completed_part(&local_client, req).await;
+                    (part, local_client)
+                }));
+            } else {
+                debug!("S3Client pool ran dry somehow!");
+                bail!("S3Client pool ran dry somehow!");
+            }
+
+            if futs.len() >= concurrent_request_limit {
+                debug!("At concurrent_request_limit... awaiting a request finishing");
+                // This won't return None because futs is not empty, so we can safely unwrap.
+                // The ? operator can throw a JoinError (if the tokio::spawn task panics)
+                let (part, local_client) = futs.next().await.unwrap()?;
+                // This ? can throw an error from upload_completed_part (i.e. making the upload_part request)
+                let part = part?;
+                client_pool.push(local_client);
+                debug!(
+                    "Returning client to pool, current size = {}",
+                    client_pool.len()
+                );
+                parts.push(part);
+                debug!("Parts finished = {}", parts.len());
+            }
         } else {
+            debug!("Error reading file: {:?}", maybe_req);
             bail!("Error reading file: {:?}", maybe_req);
         }
     }
-    // Drop all channel Senders so Receivers will stop waiting for jobs
-    work_senders.clear();
-
-    // Block until all requests sent
-    let mut completed_parts = vec![];
-    // TODO: why is there an extra layer of Result here? is that from FuturesUnordered?
-    while let Some(Ok(res)) = futures.next().await {
-        match res {
-            Ok(parts) => {
-                completed_parts.extend(parts);
-            }
-            Err(e) => {
-                bail!("Error with upload_part requests: {}", e);
-            }
-        }
+    debug!("All file chunks dispatched to tasks");
+    while let Some(result) = futs.next().await {
+        // The ? operator can throw a JoinError (if the tokio::spawn task panics)
+        // We don't care about returning S3Clients to the pool anymore
+        let (part, _) = result?;
+        // This ? can throw an error from upload_completed_part (i.e. making the upload_part request)
+        let part = part?;
+        parts.push(part);
+        debug!("Parts finished = {}", parts.len());
     }
 
-    Ok(completed_parts)
+    Ok(parts)
 }
 
 // Multipart upload references
@@ -366,9 +373,9 @@ pub async fn upload_file_multipart(
     // after 25GB file size, all uploads use 1000 parts
     // Could use more parts, but 10_000 etags in the complete_multipart_upload request seems excessive
     // discussion: https://stackoverflow.com/a/46564791
-    const CHUNK_SIZE: usize = 5 * 1024 * 1024;
-    // TODO: Make num_workers configurable
-    const NUM_WORKERS: usize = 10;
+    const CHUNK_SIZE: usize = 20 * 1024 * 1024;
+    // TODO: Make concurrent_request_limit (or RAM usage) configurable
+    const CONCURRENT_REQUEST_LIMIT: usize = 30;
 
     let tokio_file = tokio::fs::File::open(path).await?;
     let completed_parts = upload_parts(
@@ -379,7 +386,7 @@ pub async fn upload_file_multipart(
         &upload_id,
         filesize,
         CHUNK_SIZE,
-        NUM_WORKERS,
+        CONCURRENT_REQUEST_LIMIT,
     )
     .await?;
 
@@ -714,7 +721,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_upload_completed_part_chunk_err_exits_early() {
+    async fn test_upload_parts_file_read_err_exits_early() {
         // Error reading file throws immediately
         let _ = env_logger::try_init();
 
@@ -751,8 +758,48 @@ mod tests {
             predicate::str::contains("Reading file failed").eval(&e)
         );
     }
-    // TODO: tests
-    // response non-200
+
+    #[tokio::test]
+    async fn test_upload_parts_network_err_exits_early() {
+        // Error reading file throws immediately
+        let _ = env_logger::try_init();
+
+        let reader = Builder::new()
+            .read("ohno".as_bytes())
+            .read("ohno".as_bytes())
+            .read("ohno".as_bytes())
+            .build();
+
+        // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+        let client = S3Client::new_with(
+            MockRequestDispatcher::with_dispatch_error(
+                rusoto_core::request::HttpDispatchError::new("my timeout message".to_owned()),
+            ),
+            MockCredentialsProvider,
+            Default::default(),
+        );
+
+        let e = upload_parts(
+            &client,
+            reader,
+            "test".to_owned(),
+            "test".to_owned(),
+            "test",
+            12,
+            4,
+            // concurrent_request_limit must be >= num_chunks to exhaust the
+            // reader mock before the network error is handled, otherwise the
+            // mock panics with "There is still data left to read"
+            4,
+        )
+        .await
+        .unwrap_err()
+        .to_string();
+        assert_eq!(
+            true,
+            predicate::str::contains("my timeout message").eval(&e)
+        );
+    }
 
     // TODO: test that errors coming out of upload_completed_part actually error out of the upload process (stop all workers/tasks)
 
