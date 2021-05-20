@@ -326,6 +326,54 @@ where
     Ok(parts)
 }
 
+// S3 has some limits for multipart uploads: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+// Part numbers can go from 1-10,000
+// Max object size is 5TB
+// Part sizes can be between 5MB - 5GB
+// Requests only return 1000 parts at a time
+//
+// Given these limits, we need to pick a chunk size. We can't just always pick
+// 5MB, because then we could only upload files up to 5MB * 10000 parts = 50GB.
+// We don't want to always pick 500MB, because then if you're uploading a 1GB
+// file and hit an upload failure, you need to re-upload half of the file,
+// whereas if the chunk size had been 5MB then you'd have to reupload very
+// little.
+//
+// Also, I dislike using the full 10,000 parts because then you need to
+// implement pagination to use the ListParts API. Also, fitting 10,000 parts
+// into the CompleteMultipartUpload request makes it a big, slow request!
+//
+// So, we'll limit ourselves to 1000 parts and scale the part/chunk size along
+// with the filesize so that we use small chunks for small files (so upload
+// errors lose little progress) but we can still accommodate files up to the 5TB
+// limit, which people will hopefully use good/stable internet to upload.
+//
+// One final consideration: Small chunk sizes mean we spend more time on the
+// overhead of making requests and waiting for responses. So, we'll avoid 5MB
+// chunks and (somewhat arbitrarily) pick a larger default chunk size of 32MB.
+// When we provide resumable-upload functionality (or learn that users have
+// slow/spotty internet), it may make sense to reduce this default chunk size or
+// make it configurable.
+//
+// So, for files from 32MB up to 32GB, we will use 32MB chunks and 1-1000 parts.
+// For files above 32GB, we start increasing the chunk size (ceiling'd to the
+// nearest MB). We cap out at 5000GB (4.88TB).
+const DEFAULT_CHUNK_SIZE: usize = 32 * 1024 * 1024;
+const MEGABYTE: usize = 1024 * 1024;
+const GIGABYTE: usize = 1024 * MEGABYTE;
+const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
+fn derive_chunk_size(filesize: usize) -> Result<usize> {
+    if filesize > MAX_FILE_SIZE {
+        bail!("File is too large to upload! Limit is {}", MAX_FILE_SIZE);
+    }
+    let filesize_mb = (filesize as f64) / (MEGABYTE as f64);
+    let chunk_size_mb_for_1000_parts = (filesize_mb / 1000.0).ceil() as usize;
+    Ok(std::cmp::max(
+        DEFAULT_CHUNK_SIZE,
+        chunk_size_mb_for_1000_parts * MEGABYTE,
+    ))
+}
+
 // Multipart upload references
 // https://docs.rs/s3-ext/0.2.2/s3_ext/trait.S3Ext.html#tymethod.upload_from_file_multipart
 // https://stackoverflow.com/questions/66558012/rust-aws-multipart-upload-using-rusoto-multithreaded-rayon-panicked-at-there
@@ -367,12 +415,6 @@ pub async fn upload_file_multipart(
     // ======
     // Upload parts
     // ======
-    // TODO: determine chunk size based on file size, something like:
-    // chunk_size = max(25MB, ceil(filesize / 1000))
-    // after 25GB file size, all uploads use 1000 parts
-    // Could use more parts, but 10_000 etags in the complete_multipart_upload request seems excessive
-    // discussion: https://stackoverflow.com/a/46564791
-    const CHUNK_SIZE: usize = 20 * 1024 * 1024;
     // TODO: Make concurrent_request_limit (or RAM usage) configurable
     const CONCURRENT_REQUEST_LIMIT: usize = 30;
 
@@ -384,7 +426,7 @@ pub async fn upload_file_multipart(
         key.clone(),
         &upload_id,
         filesize,
-        CHUNK_SIZE,
+        derive_chunk_size(filesize)?,
         CONCURRENT_REQUEST_LIMIT,
     )
     .await?;
@@ -797,6 +839,37 @@ mod tests {
         assert_eq!(
             true,
             predicate::str::contains("my timeout message").eval(&e)
+        );
+    }
+
+    #[test]
+    fn test_derive_chunk_size() {
+        assert_eq!(
+            derive_chunk_size(DEFAULT_CHUNK_SIZE + 1).unwrap(),
+            DEFAULT_CHUNK_SIZE
+        );
+        assert_eq!(
+            derive_chunk_size(DEFAULT_CHUNK_SIZE * 1000).unwrap(),
+            DEFAULT_CHUNK_SIZE
+        );
+        assert_eq!(
+            derive_chunk_size(DEFAULT_CHUNK_SIZE * 1000 + 1).unwrap(),
+            DEFAULT_CHUNK_SIZE + MEGABYTE
+        );
+        assert_eq!(
+            derive_chunk_size((DEFAULT_CHUNK_SIZE + MEGABYTE) * 1000).unwrap(),
+            DEFAULT_CHUNK_SIZE + MEGABYTE
+        );
+        assert_eq!(
+            // 5 TB (almost)
+            derive_chunk_size(5000 * GIGABYTE).unwrap(),
+            5 * GIGABYTE
+        );
+
+        let e = derive_chunk_size(5001 * GIGABYTE).unwrap_err().to_string();
+        assert_eq!(
+            true,
+            predicate::str::contains("File is too large to upload").eval(&e)
         );
     }
 
