@@ -20,7 +20,6 @@ use rusoto_s3::{
 };
 use std::cmp::min;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
 use tokio::fs::File;
 use tokio::sync::mpsc;
 // TODO: clean up imports
@@ -194,11 +193,7 @@ where
     }))
 }
 
-async fn upload_completed_part(
-    client: &S3Client,
-    req: UploadPartRequest,
-    completed_parts: &Arc<Mutex<Vec<CompletedPart>>>,
-) -> Result<()> {
+async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Result<CompletedPart> {
     // TODO: add retry handling?
     // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
     // TODO: count some number of retries
@@ -210,12 +205,11 @@ async fn upload_completed_part(
     match resp {
         Ok(response) => {
             if let Some(e_tag) = response.e_tag {
-                // TODO: send completed parts back on channel or use mutex?
-                let mut cp = completed_parts.lock().unwrap();
-                cp.push(CompletedPart {
+                let part = CompletedPart {
                     e_tag: Some(e_tag),
                     part_number: Some(part_number),
-                });
+                };
+                Ok(part)
             } else {
                 bail!(
                     "Response for upload part {} is missing ETag header!",
@@ -229,7 +223,6 @@ async fn upload_completed_part(
             bail!("Upload part {} request failed: {}", part_number, e);
         }
     }
-    Ok(())
 }
 
 async fn upload_parts<F>(
@@ -242,7 +235,7 @@ async fn upload_parts<F>(
     // TODO: bundle these in a config object?
     chunk_size: usize,
     num_workers: usize,
-) -> Result<Arc<Mutex<Vec<CompletedPart>>>>
+) -> Result<Vec<CompletedPart>>
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
 {
@@ -269,12 +262,10 @@ where
             }
         },
     );
-    debug!("Prepared file chunk stream, mapped to UploadPartRequests");
 
+    debug!("Prepared file chunk stream, mapped to UploadPartRequests");
     let mut work_senders = vec![];
     let mut work_receivers = vec![];
-    // TODO: change from mutex to message on channel back to main thread?
-    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
     for _ in 0..num_workers {
         // TODO: bounds of channel determines how much RAM we use... make it configurable
         let (sender, receiver) = mpsc::channel(10);
@@ -282,21 +273,22 @@ where
         work_receivers.push(receiver);
     }
 
-    let futures = FuturesUnordered::new();
-    for mut receiver in work_receivers {
-        let worker_client = client.clone();
-        let worker_completed_parts = completed_parts.clone();
-        let job = tokio::spawn(async move {
-            while let Some(req) = receiver.recv().await {
-                // TODO: provide a channel for returning errors on instead of doing unwrap here
-                upload_completed_part(&worker_client, req, &worker_completed_parts)
-                    .await
-                    .unwrap();
-            }
-        });
-        futures.push(job);
-    }
+    let mut futures = work_receivers
+        .into_iter() // takes ownership, so receiver is moved into task
+        .map(|mut receiver| {
+            let worker_client = client.clone();
+            tokio::spawn(async move {
+                let mut parts = vec![];
+                while let Some(req) = receiver.recv().await {
+                    let part = upload_completed_part(&worker_client, req).await?;
+                    parts.push(part);
+                }
+                Ok::<Vec<CompletedPart>, anyhow::Error>(parts)
+            })
+        })
+        .collect::<FuturesUnordered<_>>();
 
+    // TODO: spawn a task for this (make higher type, b/c everything in FuturesUnordered needs same return type)
     let mut i = 0;
     while let Some(maybe_req) = part_requests.next().await {
         if let Ok(req) = maybe_req {
@@ -312,9 +304,18 @@ where
     work_senders.clear();
 
     // Block until all requests sent
-    debug!("Waiting on futures.collect of {:?}", futures);
-    futures.collect::<Vec<_>>().await;
-    // TODO: can this return completed parts instead of using arc-mutex-vec?
+    let mut completed_parts = vec![];
+    // TODO: why is there an extra layer of Result here? is that from FuturesUnordered?
+    while let Some(Ok(res)) = futures.next().await {
+        match res {
+            Ok(parts) => {
+                completed_parts.extend(parts);
+            }
+            Err(e) => {
+                bail!("Error with upload_part requests: {}", e);
+            }
+        }
+    }
 
     Ok(completed_parts)
 }
@@ -370,7 +371,7 @@ pub async fn upload_file_multipart(
     const NUM_WORKERS: usize = 10;
 
     let tokio_file = tokio::fs::File::open(path).await?;
-    let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = upload_parts(
+    let completed_parts = upload_parts(
         &client,
         tokio_file,
         config.bucket.clone(),
@@ -383,11 +384,8 @@ pub async fn upload_file_multipart(
     .await?;
 
     // ======
-    // Create multipart upload (to get the upload_id)
+    // Complete multipart upload
     // ======
-    let completed_parts_mutex: Mutex<Vec<CompletedPart>> = Arc::try_unwrap(completed_parts)
-        .map_err(|err| anyhow!("Failed to unwrap Arc of completed_parts: {:?}", err))?;
-    let completed_parts = completed_parts_mutex.into_inner()?;
     let req = CompleteMultipartUploadRequest {
         bucket: config.bucket.clone(),
         key: key.clone(),
@@ -625,7 +623,6 @@ mod tests {
     async fn test_upload_completed_part_success() {
         let _ = env_logger::try_init();
 
-        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::default()
@@ -643,14 +640,9 @@ mod tests {
             part_number: 1,
             ..Default::default()
         };
-        upload_completed_part(&client, req, &completed_parts)
-            .await
-            .unwrap();
-        let parts = completed_parts.lock().unwrap();
-        debug!("Parts length: {}", parts.len());
-        assert_eq!(parts.len(), 1);
+        let part = upload_completed_part(&client, req).await.unwrap();
         assert_eq!(
-            parts[0],
+            part,
             CompletedPart {
                 e_tag: Some("testvalue".to_owned()),
                 part_number: Some(1)
@@ -662,7 +654,6 @@ mod tests {
     async fn test_upload_completed_part_missing_etag() {
         let _ = env_logger::try_init();
 
-        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::default().with_body("blah"),
@@ -678,7 +669,7 @@ mod tests {
             part_number: 1,
             ..Default::default()
         };
-        let e = upload_completed_part(&client, req, &completed_parts)
+        let e = upload_completed_part(&client, req)
             .await
             .unwrap_err()
             .to_string();
@@ -686,14 +677,12 @@ mod tests {
             true,
             predicate::str::contains("Response for upload part 1 is missing ETag header!").eval(&e)
         );
-        assert_eq!(completed_parts.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]
     async fn test_upload_completed_part_timeout() {
         let _ = env_logger::try_init();
 
-        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::with_dispatch_error(
@@ -714,7 +703,7 @@ mod tests {
 
         // First request will fail with HttpDispatchError (can indicate a timeout).
         // Function should retry and succeed on second request.
-        let e = upload_completed_part(&client, req, &completed_parts)
+        let e = upload_completed_part(&client, req)
             .await
             .unwrap_err()
             .to_string();
@@ -722,7 +711,6 @@ mod tests {
             true,
             predicate::str::contains("my timeout message").eval(&e)
         );
-        assert_eq!(completed_parts.lock().unwrap().len(), 0);
     }
 
     #[tokio::test]
@@ -738,7 +726,6 @@ mod tests {
             ))
             .build();
 
-        let completed_parts: Arc<Mutex<Vec<CompletedPart>>> = Arc::new(Mutex::new(Vec::new()));
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::default().with_body("blah"),
@@ -763,7 +750,6 @@ mod tests {
             true,
             predicate::str::contains("Reading file failed").eval(&e)
         );
-        assert_eq!(completed_parts.lock().unwrap().len(), 0);
     }
     // TODO: tests
     // response non-200
