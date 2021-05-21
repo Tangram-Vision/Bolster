@@ -27,6 +27,7 @@ use tokio_util::codec;
 use crate::app_config::DigitalOceanSpacesConfig;
 use crate::app_config::{AwsS3Config, StorageProviderChoices};
 
+#[derive(Debug, Clone)]
 pub struct StorageConfig {
     credentials: StaticProvider,
     bucket: String,

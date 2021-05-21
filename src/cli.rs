@@ -8,10 +8,12 @@ use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
 use clap::{App, AppSettings, Arg};
-use std::path::Path;
+use std::io::{self, Write};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use strum::VariantNames;
 use uuid::Uuid;
+use walkdir::WalkDir;
 
 use crate::app_config::{DatabaseConfig, StorageProviderChoices};
 use crate::core::api::datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering};
@@ -35,7 +37,8 @@ where
 }
 
 /// Match commands
-pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
+#[tokio::main]
+pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
     // Handle config subcommand first, because it doesn't need any valid configuration, and is helpful for debugging bad config!
     if let Some(("config", _config_matches)) = cli_matches.subcommand() {
         commands::print_config(config)?;
@@ -48,8 +51,72 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
-        Some(("create", _create_matches)) => {
-            commands::create_dataset(&db_config)?;
+        Some(("create", create_matches)) => {
+            let provider =
+                StorageProviderChoices::from_str(create_matches.value_of("provider").unwrap())?;
+            let file_pathbufs: Vec<PathBuf> = create_matches
+                .values_of_os("PATH")
+                .unwrap()
+                .map(|os_str| Path::new(os_str))
+                .collect::<Vec<&Path>>()
+                .iter_mut()
+                .try_fold(Vec::new(), |mut acc, path| -> Result<Vec<PathBuf>> {
+                    let file_list: Result<Vec<PathBuf>> = match path {
+                        // WalkDir does not follow symlinks by default
+                        path if path.is_dir() => Ok(WalkDir::new(path)
+                            .into_iter()
+                            .filter_map(Result::ok)
+                            .filter(|entry| entry.file_type().is_file())
+                            .map(|entry| entry.into_path())
+                            .collect::<Vec<PathBuf>>()),
+                        path if path.is_file() => Ok(vec![path.to_path_buf()]),
+                        _ => Err(anyhow!("File path {:?} is not a directory or a file", path)),
+                    };
+                    let mut file_list = file_list?;
+                    acc.append(&mut file_list);
+                    Ok(acc)
+                })?;
+            let file_paths: Vec<&Path> = file_pathbufs
+                .iter()
+                .map(|pathbuf| pathbuf.as_path())
+                .collect();
+
+            let skip_prompt = create_matches.is_present("yes");
+            if skip_prompt {
+                println!("Creating a dataset of {} file(s)", file_paths.len());
+            } else {
+                println!(
+                    "This command will create a dataset of {} file(s):",
+                    file_paths.len()
+                );
+                println!(
+                    "\t{}",
+                    file_paths
+                        .iter()
+                        .map(|path| format!("{:?}", path))
+                        .collect::<Vec<String>>()
+                        .join("\n\t")
+                );
+                print!("Continue? (y/n) ");
+                io::stdout().flush()?;
+
+                let mut input = String::new();
+                io::stdin().read_line(&mut input)?;
+                if !input.to_lowercase().starts_with('y') {
+                    return Ok(());
+                }
+            }
+            // for each path,
+            //   if it's a folder, collect all files inside recursively
+            //   if it's a file, collect it
+            // prompt that file list is correct
+            // pass file list to command
+
+            // TODO: test non-utf8 filename or force utf8
+            let storage_config = storage::StorageConfig::new(config, provider)?;
+            let prefix = db.user_id_from_jwt()?.to_string();
+            commands::create_and_upload_dataset(storage_config, &db_config, &prefix, file_paths)
+                .await?;
         }
         Some(("ls", ls_matches)) => {
             // For optional arguments, if they're missing (ArgumentNotFound)
@@ -90,7 +157,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 offset,
             };
 
-            let datasets = commands::list_datasets(&db_config, &get_params)?;
+            let datasets = commands::list_datasets(&db_config, &get_params).await?;
 
             if datasets.is_empty() {
                 println!("No datasets found!");
@@ -153,13 +220,14 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
                 dataset_id,
                 Path::new(input_file),
                 &prefix,
-            )?;
+            )
+            .await?;
         }
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_id: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
             let filename = download_matches.value_of("filename").unwrap();
-            let files = commands::list_files(&db_config, dataset_id, filename)?;
+            let files = commands::list_files(&db_config, dataset_id, filename).await?;
             if files.is_empty() {
                 return Err(anyhow!(
                     "No files in dataset {} matched the filename {}",
@@ -169,7 +237,7 @@ pub fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Resul
             } else {
                 let file = &files[0];
                 // TODO: support downloading many files
-                commands::download_file(config, &file.url)?;
+                commands::download_file(config, &file.url).await?;
             }
         }
         _ => {
@@ -200,7 +268,35 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .about("Set a custom config file")
                 .takes_value(true),
         )
-        .subcommand(App::new("create").about("Create a new remote dataset"))
+        .subcommand(
+            App::new("create")
+                .about("Create + upload a new dataset")
+                .arg(
+                    Arg::new("PATH")
+                        .about("Path(s) to folder(s) or file(s) to upload")
+                        .required(true)
+                        .takes_value(true)
+                        .multiple(true)
+                )
+                .arg(
+                    Arg::new("yes")
+                        .about("Automatic yes to prompt that lists files to upload")
+                        .short('y')
+                        .long("yes")
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::new("provider")
+                        .short('p')
+                        .long("provider")
+                        .value_name("PROVIDER")
+                        .about("Upload to specified cloud storage provider")
+                        .default_value(default_storage_provider.as_ref())
+                        .possible_values(StorageProviderChoices::VARIANTS)
+                        .takes_value(true),
+                ),
+                // TODO: add -y/--yes to skip prompt
+        )
         .subcommand(
             App::new("ls")
                 .about("List remote datasets")
@@ -226,7 +322,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .value_name("???")
                         .takes_value(true),
                     Arg::new("dataset_uuid")
-                        .about("Show dataset matching uuid")
+                        .about("Show files in dataset matching uuid")
                         .short('u')
                         .long("uuid")
                         .value_name("UUID")

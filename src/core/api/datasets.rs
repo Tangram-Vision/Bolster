@@ -131,7 +131,7 @@ pub fn datasets_patch(
 }
 */
 
-pub fn datasets_get(
+pub async fn datasets_get(
     configuration: &DatabaseApiConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
@@ -179,7 +179,7 @@ pub fn datasets_get(
     Ok(datasets)
 }
 
-pub fn datasets_post(
+pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to just the metadata value and package that value into
     // the "metadata" key in the request body in this function.
@@ -212,7 +212,7 @@ pub fn datasets_post(
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
 }
 
-pub fn files_get(
+pub async fn files_get(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
     filename: &str,
@@ -242,7 +242,7 @@ pub fn files_get(
     Ok(files)
 }
 
-pub fn files_post(
+pub async fn files_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to a Dataset struct
     dataset_id: Uuid,
@@ -289,8 +289,8 @@ mod tests {
     use httpmock::MockServer;
     use std::str::FromStr;
 
-    #[test]
-    fn test_datasets_get_success() {
+    #[tokio::test]
+    async fn test_datasets_get_success() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -317,7 +317,7 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).unwrap();
+        let result = datasets_get(&config, &params).await.unwrap();
 
         mock.assert();
         assert_eq!(
@@ -327,8 +327,8 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn test_datasets_get_query_params() {
+    #[tokio::test]
+    async fn test_datasets_get_query_params() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -363,7 +363,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = datasets_get(&config, &params).unwrap();
+        let result = datasets_get(&config, &params).await.unwrap();
 
         mock.assert();
         assert_eq!(
@@ -373,8 +373,8 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn test_datasets_get_wrong_structure_json() {
+    #[tokio::test]
+    async fn test_datasets_get_wrong_structure_json() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -400,7 +400,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected json parsing error");
         let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
 
         mock.assert();
@@ -411,8 +413,8 @@ mod tests {
             .contains("JSON from Datasets API was malformed: {"));
     }
 
-    #[test]
-    fn test_datasets_get_malformed_json() {
+    #[tokio::test]
+    async fn test_datasets_get_malformed_json() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -431,7 +433,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected json parsing error");
         let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
 
         mock.assert();
@@ -441,8 +445,8 @@ mod tests {
             .contains("JSON from Datasets API was malformed: this isn't actually json"));
     }
 
-    #[test]
-    fn test_datasets_get_401_response() {
+    #[tokio::test]
+    async fn test_datasets_get_401_response() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -461,7 +465,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected status code error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected status code error");
         let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
@@ -476,8 +482,8 @@ mod tests {
         // to prompt user to check their API key for 401 responses.
     }
 
-    #[test]
-    fn test_datasets_get_timeout() {
+    #[tokio::test]
+    async fn test_datasets_get_timeout() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -497,7 +503,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected timeout error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected timeout error");
         let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();

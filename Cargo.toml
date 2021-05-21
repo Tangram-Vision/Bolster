@@ -50,6 +50,7 @@ tokio-util = { version = "0.6", features = ["codec"]}
 toml = "0.5"
 url = { version = "2.2", features = ["serde"]}
 uuid = { version = "0.8", features = ["serde"]}
+walkdir = "2.3"
 
 [dependencies.reqwest]
 version = "^0.10"
