@@ -166,7 +166,7 @@ mod tests {
             .try_into::<DatabaseConfig>()
             .unwrap()
             .database;
-        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone()).unwrap();
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("nonexistent-file");
@@ -195,7 +195,7 @@ mod tests {
             .try_into::<DatabaseConfig>()
             .unwrap()
             .database;
-        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone()).unwrap();
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("/");

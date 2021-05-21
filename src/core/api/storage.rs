@@ -247,6 +247,7 @@ async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Res
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn upload_parts<F>(
     client: &S3Client,
     tokio_file: F,
@@ -378,10 +379,14 @@ where
 // So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000 parts.
 // For files above 16GB, we start increasing the chunk size (ceiling'd to the
 // nearest MB). We cap out at 5000GB (4.88TB).
-const DEFAULT_CHUNK_SIZE: usize = 16 * 1024 * 1024;
 const MEGABYTE: usize = 1024 * 1024;
 const GIGABYTE: usize = 1024 * MEGABYTE;
+// Technically, this is 4.88TB (5TB is 5120GB). The max part size is 5GB though,
+// and if we limit ourselves to 1000 parts, then we can only support files up to
+// 5000GB. If needed in the future, we can spend the time/effort to support
+// more than 1000 parts.
 const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
+const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
 fn derive_chunk_size(filesize: usize) -> Result<usize> {
     if filesize > MAX_FILE_SIZE {
         bail!("File is too large to upload! Limit is {}", MAX_FILE_SIZE);
@@ -434,7 +439,15 @@ pub async fn upload_file_multipart(
     // ======
     // Upload parts
     // ======
-    // TODO: Make concurrent_request_limit (or RAM usage) configurable
+
+    // CONCURRENT_REQUEST_LIMIT controls how many requests can be in-flight at a
+    // time, which controls how much of the file is read and held in RAM
+    // concurrently (chunk size also plays a part).
+    //
+    // TODO: Make concurrent_request_limit (or RAM usage) configurable.
+    //
+    // TODO: This value will likely change with added support for multi-file
+    // upload (to limit RAM usage if many files are uploaded).
     const CONCURRENT_REQUEST_LIMIT: usize = 30;
 
     let tokio_file = tokio::fs::File::open(path).await?;
