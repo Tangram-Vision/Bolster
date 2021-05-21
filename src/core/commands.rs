@@ -72,8 +72,17 @@ pub async fn upload_file(
     prefix: &str,
 ) -> Result<()> {
     let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
-    // TODO: test what a good threshold is (or expose it as CLI option)
-    const MULTIPART_FILESIZE_THRESHOLD: i64 = 16 * 1024 * 1024;
+
+    // This threshold determines when we switch from one-shot upload (using
+    // PutObject API) to a multipart upload (using CreateMultipartUpload,
+    // UploadPart, and CompleteMultipartUpload APIs).
+    //
+    // The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
+    // The threshold is set a bit arbitrarily -- it is above 64MB that the
+    // multipart upload starts being faster than one-shot uploads. Below 64MB,
+    // the extra overhead of extra API calls makes multipart uploads slower.
+    const MULTIPART_FILESIZE_THRESHOLD: i64 = 64 * 1024 * 1024;
+
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
