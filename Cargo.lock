@@ -392,6 +392,7 @@ dependencies = [
  "human-panic",
  "lazy_static",
  "log",
+ "md5",
  "predicates",
  "rand",
  "reqwest",

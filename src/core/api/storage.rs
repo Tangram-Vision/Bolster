@@ -73,6 +73,26 @@ impl StorageConfig {
     }
 }
 
+// This could be sync, because we only call it on files for upload_file_oneshot,
+// so the files will be small.
+pub async fn md5_file(path: &Path) -> Result<String> {
+    let tokio_file = tokio::fs::File::open(path).await?;
+    // Feed file to md5 without reading whole file into RAM
+    let md5_ctx = codec::FramedRead::new(tokio_file, codec::BytesCodec::new())
+        .try_fold(md5::Context::new(), |mut ctx, chunk| async move {
+            ctx.consume(chunk);
+            Ok(ctx)
+        })
+        .await?;
+    let md5_digest = md5_ctx.compute();
+    let md5_bytes: [u8; 16] = md5_digest.into();
+    let md5_str = format!("{:x}", md5_digest);
+    debug!("Got md5 hash for {:?}: {}", path, md5_str);
+    let encoded = base64::encode(md5_bytes);
+    debug!("Base64-encoded md5 hash to: {}", encoded);
+    Ok(encoded)
+}
+
 // Async oneshot upload references
 // https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
 // https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
@@ -93,6 +113,7 @@ pub async fn upload_file_oneshot(
     // the bottom of the function
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
+    let md5_hash = md5_file(path).await?;
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -106,6 +127,7 @@ pub async fn upload_file_oneshot(
         body: Some(byte_stream),
         // Required when body is a stream (will change for multipart upload)
         content_length: Some(filesize),
+        content_md5: Some(md5_hash),
         key,
         ..Default::default()
     };
@@ -124,6 +146,7 @@ pub async fn upload_file_oneshot(
 #[derive(Debug)]
 struct FileChunk {
     data: Vec<u8>,
+    md5: String,
     part_number: i64,
 }
 
@@ -179,6 +202,15 @@ where
                 debug!("Read n={} bytes from file {:?}", n, state.f);
                 buf.resize(n, 0);
                 let chunk = FileChunk {
+                    // md5 could maybe be sped up by switching from read_exact
+                    // to read and passing each chunk into md5::Context as it is
+                    // read, instead of waiting for the full buffer to be read
+                    // and then passing the full buffer to md5::compute.
+                    //
+                    // Or by making md5-calculation in a task, because right now
+                    // it happens on the main thread, so we're limited to using
+                    // 1 CPU core.
+                    md5: base64::encode::<[u8; 16]>(md5::compute(&buf).into()),
                     data: buf,
                     part_number: state.part_number,
                 };
@@ -250,6 +282,7 @@ where
                 chunk.part_number,
                 chunk.data.len()
             );
+            // let md5_hash = base64::encode::<[u8; 16]>(md5::compute(&chunk.data).into());
             let streaming_body = StreamingBody::from(chunk.data);
             let part_number = chunk.part_number;
             UploadPartRequest {
@@ -257,6 +290,7 @@ where
                 bucket: bucket.clone(),
                 key: key.clone(),
                 upload_id: upload_id.to_owned(),
+                content_md5: Some(chunk.md5),
                 part_number,
                 ..Default::default()
             }
@@ -283,22 +317,24 @@ where
             if let Some(local_client) = client_pool.pop() {
                 futs.push(tokio::spawn(async move {
                     debug!("Spawned task for req {}", req.part_number);
-                    let part: Result<CompletedPart> =
-                        upload_completed_part(&local_client, req).await;
-                    (part, local_client)
+                    let part: CompletedPart = upload_completed_part(&local_client, req).await?;
+                    Ok::<_, anyhow::Error>((part, local_client))
                 }));
             } else {
                 debug!("S3Client pool ran dry somehow!");
                 bail!("S3Client pool ran dry somehow!");
             }
 
+            // We won't handle errors from upload_completed_part until now.
+            // TODO: Improve this, perhaps by moving task creation to a task and
+            // awaiting on the union of the producer and consumer tasks.
             if futs.len() >= concurrent_request_limit {
                 debug!("At concurrent_request_limit... awaiting a request finishing");
                 // This won't return None because futs is not empty, so we can safely unwrap.
-                // The ? operator can throw a JoinError (if the tokio::spawn task panics)
-                let (part, local_client) = futs.next().await.unwrap()?;
-                // This ? can throw an error from upload_completed_part (i.e. making the upload_part request)
-                let part = part?;
+                // The ? operator can throw:
+                //   - a JoinError (if the tokio::spawn task panics)
+                //   - an error from upload_completed_part (i.e. making the upload_part request)
+                let (part, local_client) = futs.next().await.unwrap()??;
                 client_pool.push(local_client);
                 debug!(
                     "Returning client to pool, current size = {}",
@@ -314,11 +350,11 @@ where
     }
     debug!("All file chunks dispatched to tasks");
     while let Some(result) = futs.next().await {
-        // The ? operator can throw a JoinError (if the tokio::spawn task panics)
-        // We don't care about returning S3Clients to the pool anymore
-        let (part, _) = result?;
-        // This ? can throw an error from upload_completed_part (i.e. making the upload_part request)
-        let part = part?;
+        // The ? operator can throw:
+        //   - a JoinError (if the tokio::spawn task panics)
+        //   - an error from upload_completed_part (i.e. making the upload_part request)
+        // Also, we don't care about returning S3Clients to the pool anymore.
+        let (part, _) = result??;
         parts.push(part);
         debug!("Parts finished = {}", parts.len());
     }
@@ -350,15 +386,15 @@ where
 //
 // One final consideration: Small chunk sizes mean we spend more time on the
 // overhead of making requests and waiting for responses. So, we'll avoid 5MB
-// chunks and (somewhat arbitrarily) pick a larger default chunk size of 32MB.
+// chunks and (somewhat arbitrarily) pick a larger default chunk size of 16MB.
 // When we provide resumable-upload functionality (or learn that users have
 // slow/spotty internet), it may make sense to reduce this default chunk size or
 // make it configurable.
 //
-// So, for files from 32MB up to 32GB, we will use 32MB chunks and 1-1000 parts.
-// For files above 32GB, we start increasing the chunk size (ceiling'd to the
+// So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000 parts.
+// For files above 16GB, we start increasing the chunk size (ceiling'd to the
 // nearest MB). We cap out at 5000GB (4.88TB).
-const DEFAULT_CHUNK_SIZE: usize = 32 * 1024 * 1024;
+const DEFAULT_CHUNK_SIZE: usize = 16 * 1024 * 1024;
 const MEGABYTE: usize = 1024 * 1024;
 const GIGABYTE: usize = 1024 * MEGABYTE;
 const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
@@ -402,7 +438,6 @@ pub async fn upload_file_multipart(
     let req = CreateMultipartUploadRequest {
         bucket: config.bucket.clone(),
         key: key.clone(),
-        // TODO: submit Content-MD5 also
         ..Default::default()
     };
     debug!("Making create_multipart_upload request {:?}", req);

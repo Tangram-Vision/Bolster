@@ -73,7 +73,7 @@ pub async fn upload_file(
 ) -> Result<()> {
     let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
     // TODO: test what a good threshold is (or expose it as CLI option)
-    const MULTIPART_FILESIZE_THRESHOLD: i64 = 20 * 1024 * 1024;
+    const MULTIPART_FILESIZE_THRESHOLD: i64 = 16 * 1024 * 1024;
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
