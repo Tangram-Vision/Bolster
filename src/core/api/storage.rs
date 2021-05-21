@@ -146,7 +146,6 @@ pub async fn upload_file_oneshot(
 #[derive(Debug)]
 struct FileChunk {
     data: Vec<u8>,
-    md5: String,
     part_number: i64,
 }
 
@@ -202,15 +201,6 @@ where
                 debug!("Read n={} bytes from file {:?}", n, state.f);
                 buf.resize(n, 0);
                 let chunk = FileChunk {
-                    // md5 could maybe be sped up by switching from read_exact
-                    // to read and passing each chunk into md5::Context as it is
-                    // read, instead of waiting for the full buffer to be read
-                    // and then passing the full buffer to md5::compute.
-                    //
-                    // Or by making md5-calculation in a task, because right now
-                    // it happens on the main thread, so we're limited to using
-                    // 1 CPU core.
-                    md5: base64::encode::<[u8; 16]>(md5::compute(&buf).into()),
                     data: buf,
                     part_number: state.part_number,
                 };
@@ -262,7 +252,7 @@ async fn upload_parts<F>(
     tokio_file: F,
     bucket: String,
     key: String,
-    upload_id: &str,
+    upload_id: String,
     filesize: usize,
     // TODO: bundle these in a config object?
     chunk_size: usize,
@@ -271,32 +261,6 @@ async fn upload_parts<F>(
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
 {
-    // TODO: Could this be simpler as tokio_file.
-    let mut part_requests = read_file_chunks(tokio_file, chunk_size, filesize as usize).map_ok(
-        |chunk: FileChunk| -> UploadPartRequest {
-            // Prints vec of bytes:
-            // debug!("Got chunk: {:?}", chunk);
-
-            debug!(
-                "Constructing chunk {} with data of size {}",
-                chunk.part_number,
-                chunk.data.len()
-            );
-            // let md5_hash = base64::encode::<[u8; 16]>(md5::compute(&chunk.data).into());
-            let streaming_body = StreamingBody::from(chunk.data);
-            let part_number = chunk.part_number;
-            UploadPartRequest {
-                body: Some(streaming_body),
-                bucket: bucket.clone(),
-                key: key.clone(),
-                upload_id: upload_id.to_owned(),
-                content_md5: Some(chunk.md5),
-                part_number,
-                ..Default::default()
-            }
-        },
-    );
-
     // The below async work could be changed to a functional approach, see:
     // https://gitlab.com/tangram-vision/bolster/-/merge_requests/10#note_581407198
 
@@ -311,12 +275,28 @@ where
     let mut client_pool: Vec<S3Client> = (0..concurrent_request_limit)
         .map(|_idx| client.clone())
         .collect();
-    while let Some(maybe_req) = part_requests.next().await {
-        if let Ok(req) = maybe_req {
-            debug!("Sending req {} to task", req.part_number);
+    let mut stream = read_file_chunks(tokio_file, chunk_size, filesize as usize);
+    while let Some(maybe_chunk) = stream.next().await {
+        if let Ok(chunk) = maybe_chunk {
+            debug!("Sending chunk {} to task", chunk.part_number);
             if let Some(local_client) = client_pool.pop() {
+                let bucket = bucket.clone();
+                let key = key.clone();
+                let upload_id = upload_id.clone();
                 futs.push(tokio::spawn(async move {
-                    debug!("Spawned task for req {}", req.part_number);
+                    debug!("Spawned task for chunk {}", chunk.part_number);
+                    let part_number = chunk.part_number;
+                    let md5 = base64::encode(*md5::compute(&chunk.data));
+                    let streaming_body = StreamingBody::from(chunk.data);
+                    let req = UploadPartRequest {
+                        body: Some(streaming_body),
+                        bucket,
+                        key,
+                        upload_id,
+                        content_md5: Some(md5),
+                        part_number,
+                        ..Default::default()
+                    };
                     let part: CompletedPart = upload_completed_part(&local_client, req).await?;
                     Ok::<_, anyhow::Error>((part, local_client))
                 }));
@@ -328,6 +308,10 @@ where
             // We won't handle errors from upload_completed_part until now.
             // TODO: Improve this, perhaps by moving task creation to a task and
             // awaiting on the union of the producer and consumer tasks.
+            //
+            // TODO: Retry UploadPart if an error raised here is of the invalid
+            // md5 digest kind:
+            // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
                 debug!("At concurrent_request_limit... awaiting a request finishing");
                 // This won't return None because futs is not empty, so we can safely unwrap.
@@ -344,8 +328,8 @@ where
                 debug!("Parts finished = {}", parts.len());
             }
         } else {
-            debug!("Error reading file: {:?}", maybe_req);
-            bail!("Error reading file: {:?}", maybe_req);
+            debug!("Error reading file: {:?}", maybe_chunk);
+            bail!("Error reading file: {:?}", maybe_chunk);
         }
     }
     debug!("All file chunks dispatched to tasks");
@@ -459,7 +443,7 @@ pub async fn upload_file_multipart(
         tokio_file,
         config.bucket.clone(),
         key.clone(),
-        &upload_id,
+        upload_id.clone(),
         filesize,
         derive_chunk_size(filesize)?,
         CONCURRENT_REQUEST_LIMIT,
@@ -821,7 +805,7 @@ mod tests {
             reader,
             "test".to_owned(),
             "test".to_owned(),
-            "test",
+            "test".to_owned(),
             8,
             4,
             2,
@@ -860,7 +844,7 @@ mod tests {
             reader,
             "test".to_owned(),
             "test".to_owned(),
-            "test",
+            "test".to_owned(),
             12,
             4,
             // concurrent_request_limit must be >= num_chunks to exhaust the
