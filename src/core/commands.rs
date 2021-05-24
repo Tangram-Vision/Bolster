@@ -90,8 +90,6 @@ pub async fn upload_file(
     path: &Path,
     prefix: &str,
 ) -> Result<()> {
-    let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
-
     // This threshold determines when we switch from one-shot upload (using
     // PutObject API) to a multipart upload (using CreateMultipartUpload,
     // UploadPart, and CompleteMultipartUpload APIs).
@@ -107,6 +105,11 @@ pub async fn upload_file(
         .to_str()
         .ok_or_else(|| anyhow!("Invalid filename (must be UTF8) {:?}", path))?;
     let key = format!("{}/{}/{}", prefix, dataset_id, key);
+    debug!("key {}", key);
+
+    debug!("Got path {:?}", path);
+    let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
+
     let metadata = json!({});
 
     if filesize < MULTIPART_FILESIZE_THRESHOLD {
@@ -168,6 +171,9 @@ mod tests {
     use super::*;
     use crate::app_config::{DatabaseConfig, StorageProviderChoices};
     use crate::core::api::datasets::DatabaseApiConfig;
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_upload_missing_file() {
@@ -201,6 +207,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_invalid_filename() {
+        let _ = env_logger::try_init();
+
         let mut config = config::Config::default();
         config
             .merge(config::File::from_str(
@@ -217,7 +225,9 @@ mod tests {
         let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
-        let path = Path::new("/");
+        // https://users.rust-lang.org/t/i-need-a-few-examples-of-non-utf8-osstring-pathbuf-for-my-unit-tests/59636
+        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        let path = pathbuf.as_path();
         let prefix = "";
         let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .await
