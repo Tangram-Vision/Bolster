@@ -4,6 +4,8 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
+use futures::stream::futures_unordered::FuturesUnordered;
+use futures::stream::StreamExt;
 use log::debug;
 use reqwest::Url;
 use serde_json::json;
@@ -35,15 +37,19 @@ pub async fn create_and_upload_dataset(
     let dataset_id: Uuid = create_dataset(db_config).await?;
 
     println!("Created new dataset with UUID: {}", dataset_id);
-    for path in file_paths {
-        // Uploads to storage AND registers to database
-
-        // TODO: make db API calls non-blocking so this can be concurrent
-        // TODO: move tokio::main off upload_file call so we can await it
-        upload_file(config.clone(), db_config, dataset_id, path, prefix).await?;
+    debug!("paths: {:?}", file_paths);
+    // Uploads to storage AND registers to database
+    //
+    // TODO: make db API calls non-blocking so this can be concurrent
+    // TODO: move tokio::main off upload_file call so we can await it
+    let mut futs = file_paths
+        .iter()
+        .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix))
+        .collect::<FuturesUnordered<_>>();
+    while let Some(res) = futs.next().await {
+        res?;
     }
-    // TODO: upload all files
-    // TODO: add_file_to_dataset for each file
+
     Ok(())
 }
 

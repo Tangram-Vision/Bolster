@@ -16,7 +16,7 @@ use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
 pub struct DatabaseApiConfig {
     pub base_url: Url,
-    pub client: reqwest::blocking::Client,
+    pub client: reqwest::Client,
 }
 
 impl DatabaseApiConfig {
@@ -36,7 +36,7 @@ impl DatabaseApiConfig {
             header::HeaderValue::from_str("return=representation")?,
         );
         Ok(Self {
-            client: reqwest::blocking::Client::builder()
+            client: reqwest::Client::builder()
                 .user_agent(user_agent)
                 .default_headers(headers)
                 .timeout(Duration::from_secs(timeout))
@@ -167,11 +167,11 @@ pub async fn datasets_get(
         req_builder = req_builder.query(&[("offset", offset)]);
     }
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     let datasets: Vec<Dataset> = serde_json::from_str(&content)
@@ -195,11 +195,11 @@ pub async fn datasets_post(
 
     req_builder = req_builder.json(&request_body);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     // TODO: save json to file and prompt user to send it to us?
@@ -230,11 +230,11 @@ pub async fn files_get(
     req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
     req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     let files: Vec<UploadedFile> = serde_json::from_str(&content)
@@ -267,12 +267,12 @@ pub async fn files_post(
     });
     req_builder = req_builder.json(&req_body);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
     // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("response content: {}", content);
 
     let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
