@@ -129,12 +129,12 @@ pub async fn upload_file_oneshot(
         key,
         ..Default::default()
     };
-    debug!("making upload_file request {:?}", req);
+    debug!("upload_file_oneshot request {:?}", req);
     // just spawn tokio here and use it, instead of async-ing everything yet
 
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
-    debug!("upload_file response {:?}", resp);
+    debug!("upload_file_oneshot response {:?}", resp);
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
@@ -279,13 +279,13 @@ where
     let mut stream = read_file_chunks(tokio_file, chunk_size, filesize as usize);
     while let Some(maybe_chunk) = stream.next().await {
         if let Ok(chunk) = maybe_chunk {
-            debug!("Sending chunk {} to task", chunk.part_number);
+            debug!("Sending chunk {} of {} to task", chunk.part_number, key);
             if let Some(local_client) = client_pool.pop() {
                 let bucket = bucket.clone();
                 let key = key.clone();
                 let upload_id = upload_id.clone();
                 futs.push(tokio::spawn(async move {
-                    debug!("Spawned task for chunk {}", chunk.part_number);
+                    debug!("Spawned task for chunk {} of {}", chunk.part_number, key);
                     let part_number = chunk.part_number;
                     let md5 = base64::encode(*md5::compute(&chunk.data));
                     let streaming_body = StreamingBody::from(chunk.data);
@@ -314,7 +314,10 @@ where
             // md5 digest kind:
             // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
-                debug!("At concurrent_request_limit... awaiting a request finishing");
+                debug!(
+                    "At concurrent_request_limit for {}... awaiting a request finishing",
+                    key
+                );
                 // This won't return None because futs is not empty, so we can safely unwrap.
                 // The ? operator can throw:
                 //   - a JoinError (if the tokio::spawn task panics)
@@ -326,14 +329,14 @@ where
                     client_pool.len()
                 );
                 parts.push(part);
-                debug!("Parts finished = {}", parts.len());
+                debug!("Parts of {} finished = {}", key, parts.len());
             }
         } else {
             debug!("Error reading file: {:?}", maybe_chunk);
             bail!("Error reading file: {:?}", maybe_chunk);
         }
     }
-    debug!("All file chunks dispatched to tasks");
+    debug!("All file chunks for {} dispatched to tasks", key);
     while let Some(result) = futs.next().await {
         // The ? operator can throw:
         //   - a JoinError (if the tokio::spawn task panics)
@@ -341,7 +344,7 @@ where
         // Also, we don't care about returning S3Clients to the pool anymore.
         let (part, _) = result??;
         parts.push(part);
-        debug!("Parts finished = {}", parts.len());
+        debug!("Parts of {} finished = {}", key, parts.len());
     }
 
     // Parts must be returned in order to AWS S3.
@@ -432,9 +435,9 @@ pub async fn upload_file_multipart(
         key: key.clone(),
         ..Default::default()
     };
-    debug!("Making create_multipart_upload request {:?}", req);
+    debug!("create_multipart_upload request {:?}", req);
     let resp = client.create_multipart_upload(req).await?;
-    debug!("Result of create_multipart_upload {:?}", resp);
+    debug!("create_multipart_upload response {:?}", resp);
     let upload_id = resp
         .upload_id
         .ok_or_else(|| anyhow!("Multipart upload is missing an UploadId"))?;
@@ -478,16 +481,16 @@ pub async fn upload_file_multipart(
         }),
         ..Default::default()
     };
-    debug!("Making complete_multipart_upload request {:?}", req);
+    debug!("complete_multipart_upload request {:?}", req);
     let resp = client.complete_multipart_upload(req).await?;
-    debug!("Result of complete_multipart_upload {:?}", resp);
+    debug!("complete_multipart_upload response {:?}", resp);
     // resp.location is s3.us-west-1.amazonaws.com/tangram-vision-datasets/
     // whereas url is tangram-vision-datasets.s3.us-west-1.amazonaws.com/
     // So they won't match, but we can just use the url value.
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
-    debug!("Resulting version {}", version);
+    debug!("Resulting version for {}: {}", key, version);
 
     Ok((url, version))
 }
@@ -798,7 +801,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_file_read_err_exits_early() {
-        // Error reading file throws immediately
         let _ = env_logger::try_init();
 
         let reader = Builder::new()
@@ -816,6 +818,7 @@ mod tests {
             Default::default(),
         );
 
+        // Error reading file throws immediately
         let e = upload_parts(
             &client,
             reader,
@@ -837,7 +840,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_network_err_exits_early() {
-        // Error reading file throws immediately
         let _ = env_logger::try_init();
 
         let reader = Builder::new()
@@ -855,6 +857,7 @@ mod tests {
             Default::default(),
         );
 
+        // Error reading networ throws immediately
         let e = upload_parts(
             &client,
             reader,
