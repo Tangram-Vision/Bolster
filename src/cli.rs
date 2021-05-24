@@ -3,7 +3,7 @@
 // Proprietary and confidential
 // ----------------------------
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version};
@@ -54,13 +54,17 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
         Some(("create", create_matches)) => {
             let provider =
                 StorageProviderChoices::from_str(create_matches.value_of("provider").unwrap())?;
-            let file_pathbufs: Vec<PathBuf> = create_matches
+            let mut file_paths: Vec<&Path> = create_matches
                 .values_of_os("PATH")
                 .unwrap()
                 .map(|os_str| Path::new(os_str))
-                .collect::<Vec<&Path>>()
-                .iter_mut()
-                .try_fold(Vec::new(), |mut acc, path| -> Result<Vec<PathBuf>> {
+                .collect::<Vec<&Path>>();
+            if file_paths.iter().any(|&path| path.is_absolute()) {
+                bail!("File/folder paths must be relative! (Folder structure is preserved in the cloud, so uploading `dir/file` will create a file at a different location than doing `cd dir` then uploading `file`.)");
+            }
+            let file_pathbufs = file_paths.iter_mut().try_fold(
+                Vec::new(),
+                |mut acc, path| -> Result<Vec<PathBuf>> {
                     let file_list: Result<Vec<PathBuf>> = match path {
                         // WalkDir does not follow symlinks by default
                         path if path.is_dir() => Ok(WalkDir::new(path)
@@ -75,7 +79,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     let mut file_list = file_list?;
                     acc.append(&mut file_list);
                     Ok(acc)
-                })?;
+                },
+            )?;
             let file_paths: Vec<&Path> = file_pathbufs
                 .iter()
                 .map(|pathbuf| pathbuf.as_path())
