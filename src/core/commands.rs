@@ -4,7 +4,7 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
-use futures::stream::futures_unordered::FuturesUnordered;
+use futures::stream;
 use futures::stream::StreamExt;
 use log::debug;
 use reqwest::Url;
@@ -38,14 +38,17 @@ pub async fn create_and_upload_dataset(
 
     println!("Created new dataset with UUID: {}", dataset_id);
     debug!("paths: {:?}", file_paths);
+
+    // TODO: Make this configurable?
+    const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
+
     // Uploads to storage AND registers to database
-    //
-    // TODO: make db API calls non-blocking so this can be concurrent
-    // TODO: move tokio::main off upload_file call so we can await it
-    let mut futs = file_paths
-        .iter()
-        .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix))
-        .collect::<FuturesUnordered<_>>();
+    let mut futs = stream::iter(
+        file_paths
+            .iter()
+            .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix)),
+    )
+    .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
     while let Some(res) = futs.next().await {
         res?;
     }

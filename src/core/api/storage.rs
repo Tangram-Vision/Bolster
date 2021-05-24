@@ -447,14 +447,11 @@ pub async fn upload_file_multipart(
     // ======
 
     // CONCURRENT_REQUEST_LIMIT controls how many requests can be in-flight at a
-    // time, which controls how much of the file is read and held in RAM
-    // concurrently (chunk size also plays a part).
+    // time (for a single file upload), which controls how much of the file is
+    // read and held in RAM concurrently (chunk size also plays a part).
     //
     // TODO: Make concurrent_request_limit (or RAM usage) configurable.
-    //
-    // TODO: This value will likely change with added support for multi-file
-    // upload (to limit RAM usage if many files are uploaded).
-    const CONCURRENT_REQUEST_LIMIT: usize = 30;
+    const CONCURRENT_REQUEST_LIMIT: usize = 10;
 
     let tokio_file = tokio::fs::File::open(path).await?;
     let completed_parts = upload_parts(
