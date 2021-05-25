@@ -262,8 +262,10 @@ async fn upload_parts<F>(
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
 {
-    // The below async work could be changed to a functional approach, see:
-    // https://gitlab.com/tangram-vision/bolster/-/merge_requests/10#note_581407198
+    // TODO: The below async work could be changed to a more functional approach,
+    // using try_buffer_unordered to limit concurrency while still exiting early
+    // in case of errors. For discussion, see:
+    // https://gitlab.com/tangram-vision/bolster/-/issues/14
 
     // Tokio threadpool spawns a thread per CPU and distributes tasks among
     // available threads, so tasks should be completed as fast as possible. We
