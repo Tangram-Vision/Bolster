@@ -241,10 +241,12 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let total_filesize = uploaded_files.iter().fold(0, |acc, f| acc + f.filesize);
             let number_of_files = uploaded_files.len();
 
-            // TODO: make output bytes human-friendly
             println!(
-                "Downloading {} files, total {} bytes",
-                number_of_files, total_filesize
+                "Downloading {} files, total {}",
+                number_of_files,
+                Byte::from_bytes(total_filesize as u128)
+                    .get_appropriate_unit(false)
+                    .to_string(),
             );
 
             for file in uploaded_files.iter() {
