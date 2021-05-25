@@ -344,6 +344,9 @@ where
         debug!("Parts finished = {}", parts.len());
     }
 
+    // Parts must be returned in order to AWS S3.
+    // DigitalOcean doesn't seem to care.
+    parts.sort_unstable_by_key(|p| p.part_number);
     Ok(parts)
 }
 
