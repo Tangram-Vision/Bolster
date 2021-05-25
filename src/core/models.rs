@@ -3,9 +3,11 @@
 // Proprietary and confidential
 // ----------------------------
 
+use anyhow::{anyhow, Result};
 use chrono::{DateTime, Utc};
 use reqwest::Url;
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::vec::Vec;
 use uuid::Uuid;
 
@@ -47,6 +49,27 @@ pub struct UploadedFile {
     // Likely unused, requesting the url w/o version downloads the latest version
     pub version: String,
     pub metadata: serde_json::Value,
+}
+
+impl UploadedFile {
+    pub fn filepath_from_url(&self) -> Result<PathBuf> {
+        let mut segments = self
+            .url
+            .path_segments()
+            .ok_or_else(|| anyhow!("File URL is malformed!"))?;
+
+        loop {
+            if let Some(segment) = segments.next() {
+                if segment == self.dataset_id.to_hyphenated().to_string() {
+                    break;
+                } else {
+                    // We got to the end and never found the dataset id?
+                    // TODO: raise error
+                }
+            }
+        }
+        Ok(segments.collect::<PathBuf>())
+    }
 }
 
 // https://serde.rs/custom-date-format.html

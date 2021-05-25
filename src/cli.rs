@@ -231,19 +231,38 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_id: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");
-            let filename = download_matches.value_of("filename").unwrap();
-            let files = commands::list_files(&db_config, dataset_id, filename).await?;
-            if files.is_empty() {
-                return Err(anyhow!(
-                    "No files in dataset {} matched the filename {}",
-                    dataset_id,
-                    filename
-                ));
-            } else {
-                let file = &files[0];
-                // TODO: support downloading many files
-                commands::download_file(config, &file.url).await?;
+            let prefixes = download_matches
+                .values_of("prefix")
+                .map_or_else(Vec::new, |values| {
+                    values.map(|s| s.to_owned()).collect::<Vec<String>>()
+                });
+            let uploaded_files = commands::list_files(&db_config, dataset_id, prefixes).await?;
+
+            let total_filesize = uploaded_files.iter().fold(0, |acc, f| acc + f.filesize);
+            let number_of_files = uploaded_files.len();
+
+            // TODO: make output bytes human-friendly
+            println!(
+                "Downloading {} files, total {} bytes",
+                number_of_files, total_filesize
+            );
+
+            for file in uploaded_files.iter() {
+                let filepath = file.filepath_from_url()?;
+
+                // TODO: add --force flag to skip prompt
+                if filepath.exists() {
+                    print!("Overwrite file: {} ? [Y/n]", filepath.as_path().display());
+                    io::stdout().flush()?;
+
+                    let mut input = String::new();
+                    io::stdin().read_line(&mut input)?;
+                    if !input.to_lowercase().starts_with('y') {
+                        return Ok(());
+                    }
+                }
             }
+            commands::download_files(config, uploaded_files).await?;
         }
         _ => {
             // Arguments are required by default (in Clap).
@@ -396,7 +415,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             App::new("download")
                 .about("Download files in remote dataset")
                 .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
-                .arg(Arg::new("filename").about("Filename of file to download").required(true).takes_value(true))
+                .arg(Arg::new("prefix").about("All files with names starting with a prefix will be downloaded").takes_value(true).multiple(true))
             // TODO: add arg to filter file(s) to download from dataset?
             // TODO: add path to download files to?
         )

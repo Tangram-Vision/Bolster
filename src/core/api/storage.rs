@@ -19,8 +19,7 @@ use rusoto_s3::{
 };
 use std::cmp::min;
 use std::path::Path;
-use tokio::fs::File;
-use tokio::io::{self, AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
 #[cfg(feature = "tangram-internal")]
@@ -492,8 +491,10 @@ pub async fn upload_file_multipart(
     Ok((url, version))
 }
 
-#[tokio::main]
-pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
+pub async fn download_file(
+    config: StorageConfig,
+    url: &Url,
+) -> Result<impl Send + Sync + AsyncRead> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
 
     // TODO: store provider, bucket, and key separately in database?
@@ -501,10 +502,6 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
         .path()
         .strip_prefix("/")
         .ok_or_else(|| anyhow!("URL path didn't start with /: {}", url.path()))?;
-    let filename = key
-        .split('/')
-        .last()
-        .ok_or_else(|| anyhow!("Key can't become filename: {}", key))?;
 
     // Increase read buffer size in rusoto:
     // https://www.rusoto.org/performance.html
@@ -525,10 +522,7 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
     debug!("download_file response {:?}", resp);
 
     let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
-    let mut body = body.into_async_read();
-    let mut file = File::create(filename).await?;
-    io::copy(&mut body, &mut file).await?;
-    Ok(())
+    Ok(body.into_async_read())
 }
 
 #[cfg(test)]

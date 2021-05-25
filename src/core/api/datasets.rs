@@ -215,20 +215,39 @@ pub async fn datasets_post(
 pub async fn files_get(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
-    filename: &str,
+    prefixes: Vec<String>,
 ) -> Result<Vec<UploadedFile>> {
     debug!(
-        "building files get request for: {} {}",
-        dataset_id, filename
+        "building files get request for: {} {:?}",
+        dataset_id, prefixes
     );
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
     api_url.set_path("files");
-    let mut req_builder = client.get(api_url.as_str());
+    let req_builder = client.get(api_url.as_str());
 
-    req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
-    req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
+    let req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
+
+    // Example query strings:
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&url=ilike.*/{prefix}*
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*,url.ilike.*/{prefix2}*,...)
+    let req_builder = if prefixes.is_empty() {
+        req_builder
+    } else {
+        req_builder.query(&[(
+            "or",
+            format!(
+                "({})",
+                prefixes
+                    .into_iter()
+                    .map(|s| format!("url.ilike.*/{}*", s))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        )])
+    };
 
     let response = req_builder.send().await?;
     response.error_for_status_ref()?;
