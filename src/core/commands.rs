@@ -6,7 +6,9 @@
 use anyhow::Result;
 use futures::stream;
 use futures::stream::StreamExt;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
+use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
@@ -19,11 +21,24 @@ use super::api::storage::StorageConfig;
 use super::models::{Dataset, UploadedFile};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
+pub fn get_default_progress_bar_style() -> ProgressStyle {
+    ProgressStyle::default_bar()
+    .template("{prefix} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} ({eta})")
+    .progress_chars("#>-")
+}
+
 pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
     // TODO: create Dataset model to pass in or just json?
     let dataset = datasets::datasets_post(config, json!({})).await?;
     Ok(dataset.dataset_id)
 }
+
+use std::sync::Arc;
+
+// struct that contains channel for each progress bar
+// each clone creates a new channel pair
+// receiver end of channels is held internally
+// `new` method spawns tokio task that selects across all channels
 
 pub async fn create_and_upload_dataset(
     config: StorageConfig,
@@ -41,16 +56,37 @@ pub async fn create_and_upload_dataset(
     // TODO: Make this configurable?
     const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
 
-    // Uploads to storage AND registers to database
-    let mut futs = stream::iter(
-        file_paths
-            .into_iter()
-            .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix)),
-    )
+    // Use Arc to share progress bar with spawned task that drives rendering
+    let multi_progress = Arc::new(MultiProgress::new());
+    // Add a hidden progress bar so MultiProgress doesn't exit immediately (and
+    // we don't have to wait on a notify to call MultiProgress.join in the first
+    // place)
+    let spinner = multi_progress.add(ProgressBar::hidden());
+
+    let mp2 = multi_progress.clone();
+    tokio::spawn(async move {
+        mp2.join().unwrap();
+    });
+
+    let mut futs = stream::iter(file_paths.into_iter().map(|path| {
+        // Uploads to storage AND registers to database
+        upload_file(
+            config.clone(),
+            db_config,
+            dataset_id,
+            path,
+            prefix,
+            &multi_progress,
+        )
+    }))
     .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
     while let Some(res) = futs.next().await {
         res?;
     }
+
+    // Calling `spinner.finish` makes it appear for some reason, so we use
+    // `finish_and_clear` instead.
+    spinner.finish_and_clear();
 
     Ok(())
 }
@@ -77,7 +113,7 @@ pub async fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
     url: &Url,
-    filesize: i64,
+    filesize: usize,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<()> {
@@ -91,6 +127,7 @@ pub async fn upload_file(
     dataset_id: Uuid,
     path: String,
     prefix: &str,
+    multi_progress: &MultiProgress,
 ) -> Result<()> {
     // This threshold determines when we switch from one-shot upload (using
     // PutObject API) to a multipart upload (using CreateMultipartUpload,
@@ -100,14 +137,14 @@ pub async fn upload_file(
     // The threshold is set a bit arbitrarily -- it is above 64MB that the
     // multipart upload starts being faster than one-shot uploads. Below 64MB,
     // the extra overhead of extra API calls makes multipart uploads slower.
-    const MULTIPART_FILESIZE_THRESHOLD: i64 = 64 * 1024 * 1024;
+    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * 1024 * 1024;
 
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
 
     debug!("Got path {:?}", path);
-    let filesize: i64 = tokio::fs::metadata(path.clone())
+    let filesize: usize = tokio::fs::metadata(path.clone())
         .await?
         .len()
         .try_into()
@@ -120,7 +157,8 @@ pub async fn upload_file(
             "Filesize {} < threshold {} so doing oneshot",
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
-        let (url, version) = storage::upload_file_oneshot(config, path, filesize, key).await?;
+        let (url, version) =
+            storage::upload_file_oneshot(config, path, filesize, key, &multi_progress).await?;
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     } else {
@@ -129,7 +167,8 @@ pub async fn upload_file(
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
         let (url, version) =
-            storage::upload_file_multipart(config, path, filesize as usize, key).await?;
+            storage::upload_file_multipart(config, path, filesize as usize, key, &multi_progress)
+                .await?;
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     }
@@ -226,7 +265,8 @@ mod tests {
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = "nonexistent-file".to_owned();
         let prefix = "";
-        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
+        let mp = MultiProgress::new();
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix, &mp)
             .await
             .expect_err("Loading nonexistent file should fail");
         assert!(

@@ -226,6 +226,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 }
             }
         }
+        /*
+        // TODO: add progress bar or remove
         Some(("upload", upload_matches)) => {
             // Safe to unwrap because arguments are required or have defaults
             let dataset_id: Uuid = upload_matches.value_of_t_or_exit("dataset_uuid");
@@ -243,6 +245,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             )
             .await?;
         }
+        */
         Some(("download", download_matches)) => {
             // Safe to unwrap because argument is required
             let dataset_id: Uuid = download_matches.value_of_t_or_exit("dataset_uuid");

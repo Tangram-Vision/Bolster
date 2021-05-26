@@ -101,9 +101,8 @@ mod tests {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("upload")
+            .arg("create")
             .arg("--provider=digitalocean")
-            .arg("25a017c2-f371-4fd6-8973-62034bf6bed9")
             .arg("non-existent-file")
             .assert()
             .failure()
@@ -302,12 +301,11 @@ mod tests_internal {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("upload")
+            .arg("create")
             .arg("--provider=digitalocean")
-            .arg("25a017c2-f371-4fd6-8973-62034bf6bed9")
             .arg("non-existent-file")
             .assert()
             .failure()
-            .stderr(predicate::str::contains("Error: No such file or directory"));
+            .stderr(predicate::str::contains("is not a directory or a file"));
     }
 }

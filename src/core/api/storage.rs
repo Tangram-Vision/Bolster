@@ -8,7 +8,9 @@
 use anyhow::{anyhow, bail, Result};
 use futures::stream::futures_unordered::FuturesUnordered;
 use futures::stream::{try_unfold, Stream, StreamExt, TryStreamExt};
+use indicatif::{MultiProgress, ProgressBar};
 use log::debug;
+use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use rusoto_core::{request, Region};
 use rusoto_credential::StaticProvider;
@@ -97,8 +99,9 @@ pub async fn md5_file(path: &str) -> Result<String> {
 pub async fn upload_file_oneshot(
     config: StorageConfig,
     path: String,
-    filesize: i64,
+    filesize: usize,
     key: String,
+    multi_progress: &MultiProgress,
 ) -> Result<(Url, String)> {
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
@@ -115,14 +118,28 @@ pub async fn upload_file_oneshot(
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
-    let tokio_file = tokio::fs::File::open(path).await?;
-    let bytemut_stream = codec::FramedRead::new(tokio_file, codec::BytesCodec::new());
-    let byte_stream = StreamingBody::new(bytemut_stream.map_ok(|bytes| bytes.freeze()));
+    let tokio_file = tokio::fs::File::open(&path).await?;
+    let byte_stream =
+        codec::FramedRead::new(tokio_file, codec::BytesCodec::new()).map_ok(|bytes| bytes.freeze());
+
+    let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
+    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_prefix(path);
+    progress_bar.set_position(0);
+
+    let pgbar = progress_bar.clone();
+    // Let progress bar follow along with # bytes read
+    let progress = Box::new(move |_bytes_read: u64, total_bytes_read: u64| {
+        pgbar.set_position(total_bytes_read);
+    });
+    let read_wrapper = ReadProgressStream::new(byte_stream, progress);
+
+    let byte_stream = StreamingBody::new(read_wrapper);
     let req = PutObjectRequest {
         bucket: config.bucket,
         body: Some(byte_stream),
         // Required when body is a stream (will change for multipart upload)
-        content_length: Some(filesize),
+        content_length: Some(filesize as i64),
         content_md5: Some(md5_hash),
         key,
         ..Default::default()
@@ -133,6 +150,7 @@ pub async fn upload_file_oneshot(
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
     debug!("upload_file_oneshot response {:?}", resp);
+    progress_bar.finish();
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
@@ -254,10 +272,13 @@ async fn upload_parts<F>(
     // TODO: bundle these in a config object?
     chunk_size: usize,
     concurrent_request_limit: usize,
+    progress_bar: ProgressBar,
 ) -> Result<Vec<CompletedPart>>
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send + std::fmt::Debug,
 {
+    let expected_num_chunks = (filesize as f64 / chunk_size as f64).ceil() as usize;
+
     // TODO: The below async work could be changed to a more functional approach,
     // using try_buffer_unordered to limit concurrency while still exiting early
     // in case of errors. For discussion, see:
@@ -269,7 +290,7 @@ where
     // into RAM at a time (having no limit leads to system freezes and
     // OOM-killing).
     let mut futs = FuturesUnordered::new();
-    let mut parts: Vec<CompletedPart> = Vec::new();
+    let mut parts: Vec<CompletedPart> = Vec::with_capacity(expected_num_chunks);
     // Pool of S3Client clones that are checked-out and checked-in by each task.
     let mut client_pool: Vec<S3Client> = (0..concurrent_request_limit)
         .map(|_idx| client.clone())
@@ -282,11 +303,14 @@ where
                 let bucket = bucket.clone();
                 let key = key.clone();
                 let upload_id = upload_id.clone();
+                let local_progress_bar = progress_bar.clone();
                 futs.push(tokio::spawn(async move {
                     debug!("Spawned task for chunk {} of {}", chunk.part_number, key);
                     let part_number = chunk.part_number;
                     let md5 = base64::encode(*md5::compute(&chunk.data));
+                    let part_size = chunk.data.len();
                     let streaming_body = StreamingBody::from(chunk.data);
+
                     let req = UploadPartRequest {
                         body: Some(streaming_body),
                         bucket,
@@ -297,6 +321,12 @@ where
                         ..Default::default()
                     };
                     let part: CompletedPart = upload_completed_part(&local_client, req).await?;
+
+                    // TODO: Progress bar updates are "chunky" (only updates
+                    // after each chunk/part finishes). Is there a way to make
+                    // this more smooth/fine-grained?
+                    local_progress_bar.inc(part_size as u64);
+
                     Ok::<_, anyhow::Error>((part, local_client))
                 }));
             } else {
@@ -412,6 +442,7 @@ pub async fn upload_file_multipart(
     path: String,
     filesize: usize,
     key: String,
+    multi_progress: &MultiProgress,
 ) -> Result<(Url, String)> {
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
@@ -450,8 +481,15 @@ pub async fn upload_file_multipart(
     //
     // TODO: Make concurrent_request_limit (or RAM usage) configurable.
     const CONCURRENT_REQUEST_LIMIT: usize = 10;
+    let chunk_size = derive_chunk_size(filesize)?;
+    let tokio_file = tokio::fs::File::open(&path).await?;
 
-    let tokio_file = tokio::fs::File::open(path).await?;
+    let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
+    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_prefix(path);
+    progress_bar.set_position(0);
+    let pgbar = progress_bar.clone();
+
     let completed_parts = upload_parts(
         &client,
         tokio_file,
@@ -459,10 +497,13 @@ pub async fn upload_file_multipart(
         key.clone(),
         upload_id.clone(),
         filesize,
-        derive_chunk_size(filesize)?,
+        chunk_size,
         CONCURRENT_REQUEST_LIMIT,
+        pgbar,
     )
     .await?;
+
+    progress_bar.finish();
 
     // ======
     // Complete multipart upload
@@ -808,6 +849,7 @@ mod tests {
         );
 
         // Error reading file throws immediately
+        let progress_bar = ProgressBar::hidden();
         let e = upload_parts(
             &client,
             reader,
@@ -817,6 +859,7 @@ mod tests {
             8,
             4,
             2,
+            progress_bar,
         )
         .await
         .unwrap_err()
@@ -847,6 +890,7 @@ mod tests {
         );
 
         // Error reading networ throws immediately
+        let progress_bar = ProgressBar::hidden();
         let e = upload_parts(
             &client,
             reader,
@@ -859,6 +903,7 @@ mod tests {
             // reader mock before the network error is handled, otherwise the
             // mock panics with "There is still data left to read"
             4,
+            progress_bar,
         )
         .await
         .unwrap_err()

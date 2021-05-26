@@ -231,7 +231,7 @@ pub async fn files_get(
 
     // Example query strings:
     // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}
-    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&url=ilike.*/{prefix}*
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*)
     // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*,url.ilike.*/{prefix2}*,...)
     let req_builder = if prefixes.is_empty() {
         req_builder
@@ -266,7 +266,7 @@ pub async fn files_post(
     // TODO: change this to a Dataset struct
     dataset_id: Uuid,
     url: &Url,
-    filesize: i64,
+    filesize: usize,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<UploadedFile> {
