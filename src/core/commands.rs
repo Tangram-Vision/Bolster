@@ -203,6 +203,7 @@ mod tests {
     use super::*;
     use crate::app_config::{DatabaseConfig, StorageProviderChoices};
     use crate::core::api::datasets::DatabaseApiConfig;
+    use chrono::Utc;
     use std::ffi::OsString;
     use std::os::unix::ffi::OsStringExt;
     use std::path::PathBuf;
@@ -289,25 +290,33 @@ mod tests {
         );
     }
 
-    // #[tokio::test]
-    // async fn test_bad_storage_config() {
-    //     let mut config = config::Config::default();
-    //     config
-    //         .merge(config::File::from_str(
-    //             "[blah]\naccess_key = \"whatever\"",
-    //             config::FileFormat::Toml,
-    //         ))
-    //         .unwrap();
+    #[tokio::test]
+    async fn test_bad_storage_config() {
+        let mut config = config::Config::default();
+        config
+            .merge(config::File::from_str(
+                "[blah]\naccess_key = \"whatever\"",
+                config::FileFormat::Toml,
+            ))
+            .unwrap();
 
-    //     let url_str = "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/test";
-    //     let url = Url::parse(&url_str).unwrap();
-    //     let error = download_file(config, &url)
-    //         .await
-    //         .expect_err("Missing storage config should error");
-    //     assert!(
-    //         error.to_string().contains("missing field"),
-    //         "{}",
-    //         error.to_string()
-    //     );
-    // }
+        let url_str =
+            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/src/resources/test.dat";
+        let file_paths = vec![UploadedFile {
+            dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
+            created_date: Utc::now(),
+            url: Url::parse(url_str).unwrap(),
+            filesize: 12,
+            version: "blah".to_owned(),
+            metadata: json!({}),
+        }];
+        let error = download_files(config, file_paths)
+            .await
+            .expect_err("Missing storage config should error");
+        assert!(
+            error.to_string().contains("missing field"),
+            "{}",
+            error.to_string()
+        );
+    }
 }

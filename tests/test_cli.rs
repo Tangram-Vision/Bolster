@@ -3,16 +3,14 @@
 // Proprietary and confidential
 // ----------------------------
 
-use assert_cmd::prelude::*;
-use httpmock::Method::GET;
-use httpmock::MockServer;
-use predicates::prelude::*;
-use serde_json::json;
-use std::process::Command;
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use assert_cmd::Command;
+    use httpmock::Method::GET;
+    use httpmock::MockServer;
+    use predicates::prelude::*;
+    use serde_json::json;
+    use std::path::Path;
 
     #[test]
     fn test_cli() {
@@ -145,6 +143,131 @@ mod tests {
             .assert()
             .success()
             .stdout(predicate::str::contains("No files found in dataset"));
+        mock.assert();
+    }
+
+    #[test]
+    fn test_cli_create_disallows_absolute_filepath() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let filepath = Path::new("src/resources/test_full_config.toml")
+            .canonicalize()
+            .unwrap();
+        assert!(filepath.is_absolute());
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("create")
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "File/folder paths must be relative!",
+            ));
+    }
+
+    #[test]
+    fn test_cli_create_lists_files_and_prompts() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let filepath = Path::new("src/resources/test_full_config.toml");
+        assert!(filepath.is_relative());
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("create")
+            .arg(filepath)
+            .write_stdin("n")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains(filepath.to_str().unwrap()))
+            .stdout(predicate::str::contains("Continue? [y/n]"));
+    }
+
+    #[test]
+    fn test_cli_download_outputs_num_files_and_bytes_and_prompts() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiODA3Y2ZmZTUtZGY2ZC00MzRhLTg2YTQtZDAwN2NkNzQ2YmQzIn0.761nFCTaAsLnU-VaUrLDMNKL6VffxEL9acYbYIaT7tQ")
+                .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
+                .path("/files");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([{
+                    "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
+                    // We don't actually want to try to download from cloud
+                    // storage, so we'll force the overwrite prompt by matching
+                    // filename of test config file and respond with no.
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "filesize": 123,
+                    "version": "blah",
+                    "metadata": {},
+                }, {
+                    "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
+                    "filesize": 123,
+                    "version": "blah",
+                    "metadata": {},
+                }]));
+        });
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("download")
+            .arg("26fb2ac2-642a-4d7e-8233-b1835623b46b")
+            .env("BOLSTER__DATABASE__URL", server.base_url())
+            .write_stdin("n")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Downloading 2 files, total 246 B"))
+            .stdout(predicate::str::contains(
+                "Overwrite file: src/resources/test_full_config.toml ? [y/n]",
+            ));
+        mock.assert();
+    }
+
+    #[test]
+    fn test_cli_download_prefixes_changes_query_params() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET)
+                .header("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiODA3Y2ZmZTUtZGY2ZC00MzRhLTg2YTQtZDAwN2NkNzQ2YmQzIn0.761nFCTaAsLnU-VaUrLDMNKL6VffxEL9acYbYIaT7tQ")
+                .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
+                .query_param("or", "(url.ilike.*/test_full*)")
+                .path("/files");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([{
+                    "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
+                    "created_date": "2021-02-03T21:21:57.713584+00:00",
+                    // We don't actually want to try to download from cloud
+                    // storage, so we'll force the overwrite prompt by matching
+                    // filename of test config file and respond with no.
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "filesize": 123,
+                    "version": "blah",
+                    "metadata": {},
+                }]));
+        });
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("download")
+            .arg("26fb2ac2-642a-4d7e-8233-b1835623b46b")
+            .arg("test_full")
+            .env("BOLSTER__DATABASE__URL", server.base_url())
+            .write_stdin("n")
+            .assert()
+            .success()
+            .stdout(predicate::str::contains("Downloading 1 files, total 123 B"))
+            .stdout(predicate::str::contains(
+                "Overwrite file: src/resources/test_full_config.toml ? [y/n]",
+            ));
         mock.assert();
     }
 }

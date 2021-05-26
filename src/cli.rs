@@ -102,7 +102,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                         .collect::<Vec<String>>()
                         .join("\n\t")
                 );
-                print!("Continue? (y/n) ");
+                print!("Continue? [y/n] ");
                 io::stdout().flush()?;
 
                 let mut input = String::new();
@@ -254,7 +254,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
                 // TODO: add --force flag to skip prompt
                 if filepath.exists() {
-                    print!("Overwrite file: {} ? [Y/n]", filepath.as_path().display());
+                    print!("Overwrite file: {} ? [y/n]", filepath.as_path().display());
                     io::stdout().flush()?;
 
                     let mut input = String::new();
