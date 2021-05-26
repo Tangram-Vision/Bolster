@@ -11,7 +11,6 @@ use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
 use std::path::{Path, PathBuf};
-use tokio::io::AsyncRead;
 use uuid::Uuid;
 
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
@@ -168,7 +167,8 @@ pub async fn download_files(config: config::Config, file_paths: Vec<UploadedFile
         )
         .buffer_unordered(MAX_FILES_DOWNLOADING_CONCURRENTLY);
         while let Some(res) = futs.next().await {
-            let (mut async_data, filepath) = res?;
+            let (bytestream, filepath) = res?;
+            let mut async_data = bytestream.into_async_read();
             if let Some(dir) = filepath.parent() {
                 tokio::fs::create_dir_all(dir).await?;
             }
@@ -184,7 +184,7 @@ pub async fn download_files(config: config::Config, file_paths: Vec<UploadedFile
 async fn download_file_and_provide_filepath(
     config: storage::StorageConfig,
     file: &UploadedFile,
-) -> Result<(impl Send + Sync + AsyncRead, PathBuf)> {
+) -> Result<(rusoto_core::ByteStream, PathBuf)> {
     let async_data = storage::download_file(config.clone(), &file.url).await?;
     let filepath = file.filepath_from_url()?;
     Ok((async_data, filepath))

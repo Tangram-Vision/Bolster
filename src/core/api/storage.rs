@@ -491,10 +491,7 @@ pub async fn upload_file_multipart(
     Ok((url, version))
 }
 
-pub async fn download_file(
-    config: StorageConfig,
-    url: &Url,
-) -> Result<impl Send + Sync + AsyncRead> {
+pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_core::ByteStream> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
 
     // TODO: store provider, bucket, and key separately in database?
@@ -522,7 +519,7 @@ pub async fn download_file(
     debug!("download_file response {:?}", resp);
 
     let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
-    Ok(body.into_async_read())
+    Ok(body)
 }
 
 #[cfg(test)]
@@ -534,8 +531,8 @@ mod tests {
     use rusoto_mock::{MockCredentialsProvider, MockRequestDispatcher};
     use tokio_test::io::Builder;
 
-    #[test]
-    fn test_download_file_403_forbidden() {
+    #[tokio::test]
+    async fn test_download_file_403_forbidden() {
         // To debug what rusoto and httpmock are doing, enable logger and run
         // tests with debug or trace level.
         // let _ = env_logger::try_init();
@@ -562,7 +559,9 @@ mod tests {
             bucket,
         };
 
-        let error = download_file(config, &url).expect_err("403 Forbidden response expected");
+        let error = download_file(config, &url)
+            .await
+            .expect_err("403 Forbidden response expected");
         match error.downcast_ref::<rusoto_core::RusotoError<rusoto_s3::GetObjectError>>() {
             Some(rusoto_core::RusotoError::Unknown(b)) => assert_eq!(b.status, 403),
             e => panic!("Unexpected error: {:?}", e),
@@ -901,11 +900,4 @@ mod tests {
             predicate::str::contains("File is too large to upload").eval(&e)
         );
     }
-
-    // TODO: test that errors coming out of upload_completed_part actually error out of the upload process (stop all workers/tasks)
-
-    // TODO: test create_multipart_upload failing with Credentials type RusotoError
-    // https://docs.rs/rusoto_core/0.46.0/rusoto_core/enum.RusotoError.html
-
-    // TODO: test if maybe_chunk is Err
 }
