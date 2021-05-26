@@ -274,7 +274,8 @@ mod tests {
 
 #[cfg(all(test, feature = "tangram-internal"))]
 mod tests_internal {
-    use super::*;
+    use assert_cmd::Command;
+    use predicates::prelude::*;
 
     #[test]
     fn test_cli_digitalocean_provider_available() {
