@@ -91,6 +91,12 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .map(|pathbuf| pathbuf.as_path())
                 .collect();
 
+            // Require all paths to be UTF-8 encodable, because S3 requires UTF-8
+            // https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
+            if file_paths.iter().any(|path| path.to_str().is_none()) {
+                bail!("All file/folder names must be valid UTF-8 (AWS S3 requirement)");
+            }
+
             let skip_prompt = create_matches.is_present("yes");
             if skip_prompt {
                 println!("Creating a dataset of {} file(s)", file_paths.len());
