@@ -7,8 +7,7 @@
 
 use anyhow::{anyhow, bail, Result};
 use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::TryStreamExt;
-use futures::stream::{try_unfold, Stream, StreamExt};
+use futures::stream::{try_unfold, Stream, StreamExt, TryStreamExt};
 use log::debug;
 use reqwest::Url;
 use rusoto_core::{request, Region};
@@ -21,9 +20,7 @@ use rusoto_s3::{
 use std::cmp::min;
 use std::path::Path;
 use tokio::fs::File;
-// TODO: clean up imports
-use tokio::io;
-use tokio::io::{AsyncRead, AsyncReadExt};
+use tokio::io::{self, AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
 #[cfg(feature = "tangram-internal")]
