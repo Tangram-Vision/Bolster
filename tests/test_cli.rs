@@ -10,7 +10,10 @@ mod tests {
     use httpmock::MockServer;
     use predicates::prelude::*;
     use serde_json::json;
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
     use std::path::Path;
+    use std::path::PathBuf;
 
     #[test]
     fn test_cli() {
@@ -162,6 +165,22 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "File/folder paths must be relative!",
+            ));
+    }
+    #[test]
+    fn test_cli_create_disallows_non_utf8() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("create")
+            .arg(pathbuf)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "All file/folder names must be valid UTF-8",
             ));
     }
 

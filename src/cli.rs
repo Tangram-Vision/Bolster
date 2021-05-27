@@ -93,26 +93,25 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             // Require all paths to be UTF-8 encodable, because S3 requires UTF-8
             // https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
-            if file_paths.iter().any(|path| path.to_str().is_none()) {
-                bail!("All file/folder names must be valid UTF-8 (AWS S3 requirement)");
-            }
+            let utf8_file_paths = file_paths
+                .into_iter()
+                .map(|path| path.to_str().ok_or_else( ||
+                    anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {}", path.display())
+                ))
+                .collect::<Result<Vec<&str>>>()?
+                .into_iter()
+                .map(|path_str| path_str.to_owned())
+                .collect::<Vec<String>>();
 
             let skip_prompt = create_matches.is_present("yes");
             if skip_prompt {
-                println!("Creating a dataset of {} file(s)", file_paths.len());
+                println!("Creating a dataset of {} file(s)", utf8_file_paths.len());
             } else {
                 println!(
                     "This command will create a dataset of {} file(s):",
-                    file_paths.len()
+                    utf8_file_paths.len()
                 );
-                println!(
-                    "\t{}",
-                    file_paths
-                        .iter()
-                        .map(|path| format!("{:?}", path))
-                        .collect::<Vec<String>>()
-                        .join("\n\t")
-                );
+                println!("\t{}", utf8_file_paths.join("\n\t"));
                 print!("Continue? [y/n] ");
                 io::stdout().flush()?;
 
@@ -131,8 +130,13 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             // TODO: test non-utf8 filename or force utf8
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let prefix = db.user_id_from_jwt()?.to_string();
-            commands::create_and_upload_dataset(storage_config, &db_config, &prefix, file_paths)
-                .await?;
+            commands::create_and_upload_dataset(
+                storage_config,
+                &db_config,
+                &prefix,
+                utf8_file_paths,
+            )
+            .await?;
         }
         Some(("ls", ls_matches)) => {
             // For optional arguments, if they're missing (ArgumentNotFound)
@@ -234,7 +238,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 storage_config,
                 &db_config,
                 dataset_id,
-                Path::new(input_file),
+                input_file.to_owned(),
                 &prefix,
             )
             .await?;

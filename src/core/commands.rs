@@ -3,14 +3,14 @@
 // Proprietary and confidential
 // ----------------------------
 
-use anyhow::{anyhow, Result};
+use anyhow::Result;
 use futures::stream;
 use futures::stream::StreamExt;
 use log::debug;
 use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use uuid::Uuid;
 
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
@@ -29,7 +29,7 @@ pub async fn create_and_upload_dataset(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
     prefix: &str,
-    file_paths: Vec<&Path>,
+    file_paths: Vec<String>,
 ) -> Result<()> {
     // TODO: create dataset and all files (w/ not-uploaded state) in single API call?
 
@@ -44,7 +44,7 @@ pub async fn create_and_upload_dataset(
     // Uploads to storage AND registers to database
     let mut futs = stream::iter(
         file_paths
-            .iter()
+            .into_iter()
             .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix)),
     )
     .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
@@ -89,7 +89,7 @@ pub async fn upload_file(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
     dataset_id: Uuid,
-    path: &Path,
+    path: String,
     prefix: &str,
 ) -> Result<()> {
     // This threshold determines when we switch from one-shot upload (using
@@ -103,14 +103,15 @@ pub async fn upload_file(
     const MULTIPART_FILESIZE_THRESHOLD: i64 = 64 * 1024 * 1024;
 
     // We retain any directories in the path
-    let key = path
-        .to_str()
-        .ok_or_else(|| anyhow!("Invalid filename (must be UTF8) {:?}", path))?;
-    let key = format!("{}/{}/{}", prefix, dataset_id, key);
+    let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
 
     debug!("Got path {:?}", path);
-    let filesize: i64 = tokio::fs::metadata(path).await?.len().try_into().unwrap();
+    let filesize: i64 = tokio::fs::metadata(path.clone())
+        .await?
+        .len()
+        .try_into()
+        .unwrap();
 
     let metadata = json!({});
 
@@ -204,9 +205,6 @@ mod tests {
     use crate::app_config::{DatabaseConfig, StorageProviderChoices};
     use crate::core::api::datasets::DatabaseApiConfig;
     use chrono::Utc;
-    use std::ffi::OsString;
-    use std::os::unix::ffi::OsStringExt;
-    use std::path::PathBuf;
 
     #[tokio::test]
     async fn test_upload_missing_file() {
@@ -226,47 +224,13 @@ mod tests {
         let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
-        let path = Path::new("nonexistent-file");
+        let path = "nonexistent-file".to_owned();
         let prefix = "";
         let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .await
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[tokio::test]
-    async fn test_upload_invalid_filename() {
-        let _ = env_logger::try_init();
-
-        let mut config = config::Config::default();
-        config
-            .merge(config::File::from_str(
-                include_str!("../resources/test_full_config.toml"),
-                config::FileFormat::Toml,
-            ))
-            .unwrap();
-
-        let db = config
-            .clone()
-            .try_into::<DatabaseConfig>()
-            .unwrap()
-            .database;
-        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
-        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
-        // https://users.rust-lang.org/t/i-need-a-few-examples-of-non-utf8-osstring-pathbuf-for-my-unit-tests/59636
-        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
-        let path = pathbuf.as_path();
-        let prefix = "";
-        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
-            .await
-            .expect_err("Loading bad filename should fail");
-        assert!(
-            error.to_string().contains("Invalid filename"),
             "{}",
             error.to_string()
         );

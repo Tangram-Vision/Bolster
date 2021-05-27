@@ -18,7 +18,6 @@ use rusoto_s3::{
     UploadPartRequest, S3,
 };
 use std::cmp::min;
-use std::path::Path;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
@@ -72,7 +71,7 @@ impl StorageConfig {
 
 // This could be sync, because we only call it on files for upload_file_oneshot,
 // so the files will be small.
-pub async fn md5_file(path: &Path) -> Result<String> {
+pub async fn md5_file(path: &str) -> Result<String> {
     let tokio_file = tokio::fs::File::open(path).await?;
     // Feed file to md5 without reading whole file into RAM
     let md5_ctx = codec::FramedRead::new(tokio_file, codec::BytesCodec::new())
@@ -97,7 +96,7 @@ pub async fn md5_file(path: &Path) -> Result<String> {
 // https://stackoverflow.com/questions/59318460/what-is-the-best-way-to-convert-an-asyncread-to-a-trystream-of-bytes
 pub async fn upload_file_oneshot(
     config: StorageConfig,
-    path: &Path,
+    path: String,
     filesize: i64,
     key: String,
 ) -> Result<(Url, String)> {
@@ -110,7 +109,7 @@ pub async fn upload_file_oneshot(
     // the bottom of the function
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
-    let md5_hash = md5_file(path).await?;
+    let md5_hash = md5_file(&path).await?;
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -410,7 +409,7 @@ fn derive_chunk_size(filesize: usize) -> Result<usize> {
 // https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf
 pub async fn upload_file_multipart(
     config: StorageConfig,
-    path: &Path,
+    path: String,
     filesize: usize,
     key: String,
 ) -> Result<(Url, String)> {
