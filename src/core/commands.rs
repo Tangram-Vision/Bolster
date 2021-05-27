@@ -12,7 +12,6 @@ use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
-use std::path::PathBuf;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -206,45 +205,71 @@ pub async fn list_files(
     datasets::files_get(config, dataset_id, prefixes).await
 }
 
-pub async fn download_files(config: config::Config, file_paths: Vec<UploadedFile>) -> Result<()> {
+pub async fn download_files(
+    config: config::Config,
+    uploaded_files: Vec<UploadedFile>,
+) -> Result<()> {
     // TODO: Make this configurable?
     const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
 
-    if file_paths.is_empty() {
+    if uploaded_files.is_empty() {
         Ok(())
     } else {
+        let guard = MultiProgressGuard::new().await;
+        let multi_progress = guard.inner.clone();
+
         // Based on url from database, find which StorageProvider's config to use
-        let provider = StorageProviderChoices::from_url(&file_paths[0].url)?;
+        let provider = StorageProviderChoices::from_url(&uploaded_files[0].url)?;
         let storage_config = StorageConfig::new(config, provider)?;
 
         let mut futs = stream::iter(
-            file_paths
+            uploaded_files
                 .iter()
-                .map(|file| download_file_and_provide_filepath(storage_config.clone(), file)),
+                .zip(std::iter::repeat_with(|| storage_config.clone()))
+                .map(|(uploaded_file, local_storage_config)| {
+                    download_file(local_storage_config, &uploaded_file, &multi_progress)
+                }),
         )
         .buffer_unordered(MAX_FILES_DOWNLOADING_CONCURRENTLY);
         while let Some(res) = futs.next().await {
-            let (bytestream, filepath) = res?;
-            let mut async_data = bytestream.into_async_read();
-            if let Some(dir) = filepath.parent() {
-                tokio::fs::create_dir_all(dir).await?;
-            }
-            let mut file = tokio::fs::File::create(filepath).await?;
-            tokio::io::copy(&mut async_data, &mut file).await?;
+            res?;
         }
 
         Ok(())
     }
 }
 
-// Helper function to provide filepath along with downloaded file data
-async fn download_file_and_provide_filepath(
-    config: storage::StorageConfig,
-    file: &UploadedFile,
-) -> Result<(rusoto_core::ByteStream, PathBuf)> {
-    let async_data = storage::download_file(config.clone(), &file.url).await?;
-    let filepath = file.filepath_from_url()?;
-    Ok((async_data, filepath))
+pub async fn download_file(
+    storage_config: StorageConfig,
+    uploaded_file: &UploadedFile,
+    multi_progress: &MultiProgress,
+) -> Result<()> {
+    debug!("Downloading file: {}", uploaded_file.url);
+    let filepath = uploaded_file.filepath_from_url()?;
+    if let Some(dir) = filepath.parent() {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+
+    let progress_bar = multi_progress.add(ProgressBar::new(uploaded_file.filesize));
+    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_prefix(filepath.to_string_lossy().into_owned());
+    progress_bar.set_position(0);
+    let pgbar = progress_bar.clone();
+    // Let progress bar follow along with # bytes read
+    let progress = Box::new(move |_bytes_read: u64, total_bytes_read: u64| {
+        pgbar.set_position(total_bytes_read);
+    });
+
+    let async_data = storage::download_file(storage_config, &uploaded_file.url).await?;
+    let mut file = tokio::fs::File::create(filepath.clone()).await?;
+    let read_wrapper = ReadProgressStream::new(async_data, progress);
+
+    let mut wrapper = tokio_util::io::StreamReader::new(read_wrapper);
+    tokio::io::copy(&mut wrapper, &mut file).await?;
+    debug!("Downloaded file copied to destination: {:?}", filepath);
+    progress_bar.finish();
+
+    Ok(())
 }
 
 /// Show the configuration file
