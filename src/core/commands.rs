@@ -4,8 +4,10 @@
 // ----------------------------
 
 use anyhow::{anyhow, Result};
+use log::debug;
 use reqwest::Url;
 use serde_json::json;
+use std::convert::TryInto;
 use std::fs;
 use std::path::Path;
 use uuid::Uuid;
@@ -53,7 +55,7 @@ pub fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
     url: &Url,
-    filesize: u64,
+    filesize: i64,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<()> {
@@ -61,29 +63,59 @@ pub fn add_file_to_dataset(
     Ok(())
 }
 
-pub fn upload_file(
+#[tokio::main]
+pub async fn upload_file(
     config: StorageConfig,
+    db_config: &DatabaseApiConfig,
     dataset_id: Uuid,
     path: &Path,
     prefix: &str,
-) -> Result<(Url, String, u64)> {
+) -> Result<()> {
+    let filesize: i64 = fs::metadata(path)?.len().try_into().unwrap();
+
+    // This threshold determines when we switch from one-shot upload (using
+    // PutObject API) to a multipart upload (using CreateMultipartUpload,
+    // UploadPart, and CompleteMultipartUpload APIs).
+    //
+    // The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
+    // The threshold is set a bit arbitrarily -- it is above 64MB that the
+    // multipart upload starts being faster than one-shot uploads. Below 64MB,
+    // the extra overhead of extra API calls makes multipart uploads slower.
+    const MULTIPART_FILESIZE_THRESHOLD: i64 = 64 * 1024 * 1024;
+
     let key = path
         .file_name()
         .ok_or_else(|| anyhow!("Invalid filename {:?}", path))?
         .to_str()
         .ok_or_else(|| anyhow!("Filename is invalid UTF8 {:?}", path))?;
     let key = format!("{}/{}/{}", prefix, dataset_id, key);
+    let metadata = json!({});
 
-    // TODO: change to
-    // https://docs.rs/tokio/0.2.20/tokio/prelude/trait.AsyncRead.html or impl
-    // of BufRead trait to handle big files
-    let contents = fs::read(path)?;
-    let filesize = fs::metadata(path)?.len();
+    if filesize < MULTIPART_FILESIZE_THRESHOLD {
+        debug!(
+            "Filesize {} < threshold {} so doing oneshot",
+            filesize, MULTIPART_FILESIZE_THRESHOLD
+        );
+        let (url, version) = storage::upload_file_oneshot(config, path, filesize, key).await?;
+        // Register uploaded file to database
+        add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata)?;
+    } else {
+        debug!(
+            "Filesize {} > threshold {} so doing multipart",
+            filesize, MULTIPART_FILESIZE_THRESHOLD
+        );
+        let (url, version) =
+            storage::upload_file_multipart(config, path, filesize as usize, key).await?;
+        // Register uploaded file to database
+        add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata)?;
+    }
 
-    // TODO: get filesize
+    // TODO: add progress bar for upload/download
+    // TODO: spawn upload/download task with channel back to "main" task, which receives progress updates (that it can print to stdout) until upload/download task ends
 
-    let (url, version) = storage::upload_file(config, contents, key)?;
-    Ok((url, version, filesize))
+    // TODO: trigger calibration pipeline after all files have uploaded successfully
+
+    Ok(())
 }
 
 pub fn list_files(
@@ -116,8 +148,8 @@ pub fn print_config(config: config::Config) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::ffi;
-    use std::os::unix::ffi::OsStrExt;
+    use crate::app_config::{DatabaseConfig, StorageProviderChoices};
+    use crate::core::api::datasets::DatabaseApiConfig;
 
     #[test]
     fn test_upload_missing_file() {
@@ -129,37 +161,20 @@ mod tests {
             ))
             .unwrap();
 
+        let db = config
+            .clone()
+            .try_into::<DatabaseConfig>()
+            .unwrap()
+            .database;
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("nonexistent-file");
         let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .expect_err("Loading nonexistent file should fail");
         assert!(
             error.to_string().contains("No such file or directory"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[test]
-    fn test_upload_invalid_filename_utf8() {
-        let mut config = config::Config::default();
-        config
-            .merge(config::File::from_str(
-                include_str!("../resources/test_full_config.toml"),
-                config::FileFormat::Toml,
-            ))
-            .unwrap();
-
-        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
-        let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
-        let path = Path::new(ffi::OsStr::from_bytes(&[128u8]));
-        let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
-            .expect_err("Loading bad filename should fail");
-        assert!(
-            error.to_string().contains("Filename is invalid UTF8"),
             "{}",
             error.to_string()
         );
@@ -175,11 +190,17 @@ mod tests {
             ))
             .unwrap();
 
+        let db = config
+            .clone()
+            .try_into::<DatabaseConfig>()
+            .unwrap()
+            .database;
+        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
         let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = Path::new("/");
         let prefix = "";
-        let error = upload_file(storage_config, dataset_id, path, prefix)
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
             .expect_err("Loading bad filename should fail");
         assert!(
             error.to_string().contains("Invalid filename"),

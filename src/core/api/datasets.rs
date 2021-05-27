@@ -247,7 +247,7 @@ pub fn files_post(
     // TODO: change this to a Dataset struct
     dataset_id: Uuid,
     url: &Url,
-    filesize: u64,
+    filesize: i64,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<UploadedFile> {
