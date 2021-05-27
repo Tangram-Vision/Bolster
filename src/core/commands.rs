@@ -13,6 +13,7 @@ use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
 use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
@@ -33,12 +34,41 @@ pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
     Ok(dataset.dataset_id)
 }
 
-use std::sync::Arc;
+/// Manages annoyances with indicatif, namely that:
+/// - some thread of execution needs to join the MultiProgress to get progress
+/// bars to render
+/// - joining the MultiProgress immediately returns if there aren't ProgressBars
+/// attached, so we add a hidden/bogus one
+/// - the hidden/bogus ProgressBar needs to be cleaned up (by Drop, in this
+/// implementation) when we don't need to update progress bars anymore
+struct MultiProgressGuard {
+    inner: Arc<MultiProgress>,
+    hidden_spinner: ProgressBar,
+}
 
-// struct that contains channel for each progress bar
-// each clone creates a new channel pair
-// receiver end of channels is held internally
-// `new` method spawns tokio task that selects across all channels
+impl MultiProgressGuard {
+    async fn new() -> Self {
+        let mp = Arc::new(MultiProgress::new());
+        let spinner = mp.add(ProgressBar::hidden());
+        let guard = MultiProgressGuard {
+            inner: mp,
+            hidden_spinner: spinner,
+        };
+        let mp2 = guard.inner.clone();
+        tokio::spawn(async move {
+            mp2.join().unwrap();
+        });
+        guard
+    }
+}
+
+impl Drop for MultiProgressGuard {
+    fn drop(&mut self) {
+        // Calling `spinner.finish` makes it appear for some reason, so we use
+        // `finish_and_clear` instead.
+        self.hidden_spinner.finish_and_clear();
+    }
+}
 
 pub async fn create_and_upload_dataset(
     config: StorageConfig,
@@ -56,17 +86,8 @@ pub async fn create_and_upload_dataset(
     // TODO: Make this configurable?
     const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
 
-    // Use Arc to share progress bar with spawned task that drives rendering
-    let multi_progress = Arc::new(MultiProgress::new());
-    // Add a hidden progress bar so MultiProgress doesn't exit immediately (and
-    // we don't have to wait on a notify to call MultiProgress.join in the first
-    // place)
-    let spinner = multi_progress.add(ProgressBar::hidden());
-
-    let mp2 = multi_progress.clone();
-    tokio::spawn(async move {
-        mp2.join().unwrap();
-    });
+    let guard = MultiProgressGuard::new().await;
+    let multi_progress = guard.inner.clone();
 
     let mut futs = stream::iter(file_paths.into_iter().map(|path| {
         // Uploads to storage AND registers to database
@@ -83,10 +104,6 @@ pub async fn create_and_upload_dataset(
     while let Some(res) = futs.next().await {
         res?;
     }
-
-    // Calling `spinner.finish` makes it appear for some reason, so we use
-    // `finish_and_clear` instead.
-    spinner.finish_and_clear();
 
     Ok(())
 }
