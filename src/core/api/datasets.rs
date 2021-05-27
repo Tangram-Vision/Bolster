@@ -3,12 +3,13 @@
 // Proprietary and confidential
 // ----------------------------
 
+use std::time::Duration;
+
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use log::debug;
 use reqwest::{header, Url};
 use serde_json::json;
-use std::time::Duration;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
@@ -303,10 +304,11 @@ pub async fn files_post(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
     use std::str::FromStr;
+
+    use httpmock::{Method::GET, MockServer};
+
+    use super::*;
 
     #[tokio::test]
     async fn test_datasets_get_success() {

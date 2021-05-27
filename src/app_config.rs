@@ -3,15 +3,16 @@
 // Proprietary and confidential
 // ----------------------------
 
+use std::cmp::PartialEq;
+
 use anyhow::{anyhow, bail, Context, Result};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use std::cmp;
 use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
 // TODO: should this be "UploadStorageProviderChoices"?
-#[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, cmp::PartialEq)]
+#[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, PartialEq)]
 pub enum StorageProviderChoices {
     #[cfg(feature = "tangram-internal")]
     #[strum(serialize = "digitalocean")]
@@ -126,9 +127,11 @@ impl Database {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use predicates::prelude::*;
     use std::str::FromStr;
+
+    use predicates::prelude::*;
+
+    use super::*;
 
     #[test]
     fn test_bad_url_to_provider_enum() {
@@ -278,8 +281,9 @@ mod tests {
 
 #[cfg(all(test, feature = "tangram-internal"))]
 mod tests_internal {
-    use super::*;
     use std::str::FromStr;
+
+    use super::*;
 
     #[test]
     fn test_digitalocean_provider_available() {

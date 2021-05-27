@@ -3,12 +3,12 @@
 // Proprietary and confidential
 // ----------------------------
 
+use std::{path::PathBuf, vec::Vec};
+
 use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use reqwest::Url;
 use serde::Deserialize;
-use std::path::PathBuf;
-use std::vec::Vec;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -117,9 +117,10 @@ mod notz_rfc_3339 {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use predicates::prelude::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_uploadedfile_filepath_from_url_success() {

@@ -3,22 +3,25 @@
 // Proprietary and confidential
 // ----------------------------
 
+use std::{convert::TryInto, iter, sync::Arc};
+
 use anyhow::Result;
-use futures::stream;
-use futures::stream::StreamExt;
+use futures::{stream, stream::StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
 use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use serde_json::json;
-use std::convert::TryInto;
-use std::sync::Arc;
 use uuid::Uuid;
 
-use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
-use super::api::storage;
-use super::api::storage::StorageConfig;
-use super::models::{Dataset, UploadedFile};
+use super::{
+    api::{
+        datasets::{self, DatabaseApiConfig, DatasetGetRequest},
+        storage,
+        storage::StorageConfig,
+    },
+    models::{Dataset, UploadedFile},
+};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
 pub fn get_default_progress_bar_style() -> ProgressStyle {
@@ -225,7 +228,7 @@ pub async fn download_files(
         let mut futs = stream::iter(
             uploaded_files
                 .iter()
-                .zip(std::iter::repeat_with(|| storage_config.clone()))
+                .zip(iter::repeat_with(|| storage_config.clone()))
                 .map(|(uploaded_file, local_storage_config)| {
                     download_file(local_storage_config, &uploaded_file, &multi_progress)
                 }),
@@ -251,7 +254,7 @@ pub async fn download_file(
     }
 
     let progress_bar = multi_progress.add(ProgressBar::new(uploaded_file.filesize));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(get_default_progress_bar_style());
     progress_bar.set_prefix(filepath.to_string_lossy().into_owned());
     progress_bar.set_position(0);
     let pgbar = progress_bar.clone();
@@ -282,10 +285,13 @@ pub fn print_config(config: config::Config) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::app_config::{DatabaseConfig, StorageProviderChoices};
-    use crate::core::api::datasets::DatabaseApiConfig;
     use chrono::Utc;
+
+    use super::*;
+    use crate::{
+        app_config::{DatabaseConfig, StorageProviderChoices},
+        core::api::datasets::DatabaseApiConfig,
+    };
 
     #[tokio::test]
     async fn test_upload_missing_file() {

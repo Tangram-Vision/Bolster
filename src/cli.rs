@@ -3,28 +3,37 @@
 // Proprietary and confidential
 // ----------------------------
 
+use std::{
+    fmt::Display,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use anyhow::{anyhow, bail, Result};
 use byte_unit::Byte;
 use chrono::NaiveDate;
-use clap::{crate_authors, crate_description, crate_version};
-use clap::{App, AppSettings, Arg};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use clap::{crate_authors, crate_description, crate_version, App, AppSettings, Arg};
 use strum::VariantNames;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::app_config::{DatabaseConfig, StorageProviderChoices};
-use crate::core::api::datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering};
-use crate::core::api::storage;
-use crate::core::commands;
+use crate::{
+    app_config::{DatabaseConfig, StorageProviderChoices},
+    core::{
+        api::{
+            datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering},
+            storage,
+        },
+        commands,
+    },
+};
 
 /// Extract optional arg with a specific type, exiting on parse error
 pub fn handle_optional_arg<T>(matches: &clap::ArgMatches, arg_name: &str) -> Option<T>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::fmt::Display,
+    <T as FromStr>::Err: Display,
 {
     match matches.value_of_t(arg_name) {
         Ok(val) => Some(val),

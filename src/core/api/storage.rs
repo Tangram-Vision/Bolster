@@ -5,27 +5,32 @@
 
 // TODO: extract common code between aws/digitalocean
 
+use std::cmp::{max, min};
+
 use anyhow::{anyhow, bail, Result};
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::{try_unfold, Stream, StreamExt, TryStreamExt};
+use futures::stream::{
+    futures_unordered::FuturesUnordered, try_unfold, Stream, StreamExt, TryStreamExt,
+};
 use indicatif::{MultiProgress, ProgressBar};
 use log::debug;
 use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
-use rusoto_core::{request, Region};
+use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
     CreateMultipartUploadRequest, GetObjectRequest, PutObjectRequest, S3Client, StreamingBody,
     UploadPartRequest, S3,
 };
-use std::cmp::min;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
 #[cfg(feature = "tangram-internal")]
 use crate::app_config::DigitalOceanSpacesConfig;
-use crate::app_config::{AwsS3Config, StorageProviderChoices};
+use crate::{
+    app_config::{AwsS3Config, StorageProviderChoices},
+    core::commands,
+};
 
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
@@ -114,7 +119,7 @@ pub async fn upload_file_oneshot(
     let url = Url::parse(&url_str)?;
     let md5_hash = md5_file(&path).await?;
 
-    let dispatcher = request::HttpClient::new().unwrap();
+    let dispatcher = rusoto_core::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
@@ -123,7 +128,7 @@ pub async fn upload_file_oneshot(
         codec::FramedRead::new(tokio_file, codec::BytesCodec::new()).map_ok(|bytes| bytes.freeze());
 
     let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(commands::get_default_progress_bar_style());
     progress_bar.set_prefix(path);
     progress_bar.set_position(0);
 
@@ -427,7 +432,7 @@ fn derive_chunk_size(filesize: usize) -> Result<usize> {
     }
     let filesize_mb = (filesize as f64) / (MEGABYTE as f64);
     let chunk_size_mb_for_1000_parts = (filesize_mb / 1000.0).ceil() as usize;
-    Ok(std::cmp::max(
+    Ok(max(
         DEFAULT_CHUNK_SIZE,
         chunk_size_mb_for_1000_parts * MEGABYTE,
     ))
@@ -452,7 +457,7 @@ pub async fn upload_file_multipart(
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
 
-    let dispatcher = request::HttpClient::new().unwrap();
+    let dispatcher = rusoto_core::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
@@ -485,7 +490,7 @@ pub async fn upload_file_multipart(
     let tokio_file = tokio::fs::File::open(&path).await?;
 
     let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(commands::get_default_progress_bar_style());
     progress_bar.set_prefix(path);
     progress_bar.set_position(0);
     let pgbar = progress_bar.clone();
@@ -543,9 +548,9 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
     // Increase read buffer size in rusoto:
     // https://www.rusoto.org/performance.html
     // TODO: test the effect of this change!
-    let mut http_config = request::HttpConfig::new();
+    let mut http_config = rusoto_core::HttpConfig::new();
     http_config.read_buf_size(2 * 1024 * 1024);
-    let dispatcher = request::HttpClient::new_with_config(http_config).unwrap();
+    let dispatcher = rusoto_core::HttpClient::new_with_config(http_config).unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
     let req = GetObjectRequest {
@@ -564,12 +569,12 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
+    use httpmock::{Method::GET, MockServer};
     use predicates::prelude::*;
     use rusoto_mock::{MockCredentialsProvider, MockRequestDispatcher};
     use tokio_test::io::Builder;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_download_file_403_forbidden() {

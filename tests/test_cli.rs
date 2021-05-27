@@ -5,15 +5,16 @@
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        ffi::OsString,
+        os::unix::ffi::OsStringExt,
+        path::{Path, PathBuf},
+    };
+
     use assert_cmd::Command;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
+    use httpmock::{Method::GET, MockServer};
     use predicates::prelude::*;
     use serde_json::json;
-    use std::ffi::OsString;
-    use std::os::unix::ffi::OsStringExt;
-    use std::path::Path;
-    use std::path::PathBuf;
 
     #[test]
     fn test_cli() {
