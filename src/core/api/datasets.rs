@@ -231,8 +231,8 @@ pub async fn files_get(
 
     // Example query strings:
     // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}
-    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*)
-    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*,url.ilike.*/{prefix2}*,...)
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(filepath.ilike.{prefix}*)
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(filepath.ilike.{prefix}*,filepath.ilike.{prefix2}*,...)
     let req_builder = if prefixes.is_empty() {
         req_builder
     } else {
@@ -242,7 +242,7 @@ pub async fn files_get(
                 "({})",
                 prefixes
                     .into_iter()
-                    .map(|s| format!("url.ilike.*/{}*", s))
+                    .map(|s| format!("filepath.ilike.{}*", s))
                     .collect::<Vec<_>>()
                     .join(",")
             ),

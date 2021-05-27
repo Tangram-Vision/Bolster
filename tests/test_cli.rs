@@ -256,7 +256,7 @@ mod tests {
             when.method(GET)
                 .header("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiODA3Y2ZmZTUtZGY2ZC00MzRhLTg2YTQtZDAwN2NkNzQ2YmQzIn0.761nFCTaAsLnU-VaUrLDMNKL6VffxEL9acYbYIaT7tQ")
                 .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
-                .query_param("or", "(url.ilike.*/test_full*)")
+                .query_param("or", "(filepath.ilike.test_full*)")
                 .path("/files");
             then.status(200)
                 .header("Content-Type", "application/json")
