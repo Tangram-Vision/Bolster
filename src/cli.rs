@@ -60,7 +60,12 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .map(|os_str| Path::new(os_str))
                 .collect::<Vec<&Path>>();
             if file_paths.iter().any(|&path| path.is_absolute()) {
-                bail!("File/folder paths must be relative! (Folder structure is preserved in the cloud, so uploading `dir/file` will create a file at a different location than doing `cd dir` then uploading `file`.)");
+                bail!(
+                    "File/folder paths must be relative! (Folder structure is \
+                    preserved in the cloud, so uploading `dir/file` will create \
+                    a file at a different location than doing `cd dir` then \
+                    uploading `file`.)"
+                );
             }
             let file_pathbufs = file_paths.iter_mut().try_fold(
                 Vec::new(),

@@ -314,7 +314,7 @@ where
             // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
                 debug!(
-                    "At concurrent_request_limit for {}... awaiting a request finishing",
+                    "At concurrent_request_limit for {}... awaiting request completion",
                     key
                 );
                 // This won't return None because futs is not empty, so we can safely unwrap.

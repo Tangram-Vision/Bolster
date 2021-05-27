@@ -125,7 +125,7 @@ mod tests {
     fn test_uploadedfile_filepath_from_url_success() {
         let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
         let url_str = format!(
-            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/{}/src/resources/test.dat",
+            "https://bucket.example.com/{}/src/resources/test.dat",
             dataset_id
         );
         let uf = UploadedFile {
@@ -146,7 +146,7 @@ mod tests {
     fn test_uploadedfile_filepath_from_url_bad_url_missing_dataset_id() {
         let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
         let url_str = format!(
-            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/{}/src/resources/test.dat",
+            "https://bucket.example.com/{}/src/resources/test.dat",
             "not-the-right-dataset-id"
         );
         let uf = UploadedFile {
