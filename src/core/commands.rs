@@ -57,7 +57,7 @@ pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
 /// attached, so we add a hidden/bogus one
 /// - the hidden/bogus ProgressBar needs to be cleaned up (by Drop, in this
 /// implementation) when we don't need to update progress bars anymore
-struct MultiProgressGuard {
+pub struct MultiProgressGuard {
     inner: Arc<MultiProgress>,
     hidden_spinner: ProgressBar,
 }
@@ -65,7 +65,7 @@ struct MultiProgressGuard {
 impl MultiProgressGuard {
     /// Initializes a [MultiProgress] (with a hidden progress bar) and joins it
     /// to begin rendering.
-    async fn new() -> Self {
+    pub async fn new() -> Self {
         let mp = Arc::new(MultiProgress::new());
         let spinner = mp.add(ProgressBar::hidden());
         let guard = MultiProgressGuard {

@@ -180,7 +180,7 @@ pub async fn upload_file_oneshot(
 
 /// A single chunk of a larger file, identified by index number.
 #[derive(Debug)]
-struct FileChunk {
+pub struct FileChunk {
     /// Raw file data.
     data: Vec<u8>,
     /// Identifying index of this chunk in the file.
@@ -189,7 +189,7 @@ struct FileChunk {
 
 /// Tracks how much of the file we've read.
 #[derive(Debug)]
-struct FileReadState<F>
+pub struct FileReadState<F>
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send,
 {
@@ -224,7 +224,7 @@ where
 /// # Errors
 ///
 /// Returns an error in the stream if reading the file fails.
-fn read_file_chunks<F>(
+pub fn read_file_chunks<F>(
     f: F,
     size_in_bytes: usize,
     filesize: usize,
@@ -284,7 +284,10 @@ where
 /// Returns an error if cloud storage returns a non-200 response (e.g. if auth
 /// credentials are invalid, if server is unreachable, if checksum doesn't
 /// match) or if the returned data is malformed.
-async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Result<CompletedPart> {
+pub async fn upload_completed_part(
+    client: &S3Client,
+    req: UploadPartRequest,
+) -> Result<CompletedPart> {
     // TODO: add retry handling?
     // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
     // TODO: count some number of retries
@@ -325,7 +328,7 @@ async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Res
 /// credentials are invalid, if server is unreachable, if checksum doesn't
 /// match) or if the returned data is malformed.
 #[allow(clippy::too_many_arguments)]
-async fn upload_parts<F>(
+pub async fn upload_parts<F>(
     client: &S3Client,
     tokio_file: F,
     bucket: String,
@@ -445,8 +448,8 @@ where
 }
 
 // TODO: Replace these with byte_unit crate's versions
-const MEGABYTE: usize = 1024 * 1024;
-const GIGABYTE: usize = 1024 * MEGABYTE;
+pub const MEGABYTE: usize = 1024 * 1024;
+pub const GIGABYTE: usize = 1024 * MEGABYTE;
 
 /// Size of each file chunk when uploading large files.
 ///
@@ -484,7 +487,7 @@ const GIGABYTE: usize = 1024 * MEGABYTE;
 /// So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000
 /// parts.  For files above 16GB, we start increasing the chunk size (ceiling'd
 /// to the nearest MB). We cap out at 5000GB (4.88TB).
-const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
+pub const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
 
 /// Maximum file size bolster can upload.
 ///
@@ -492,7 +495,7 @@ const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
 /// The max part size is 5GB though, and if we limit ourselves to 1000 parts,
 /// then we can only support files up to 5000GB. If needed in the future, we can
 /// spend the time/effort to support more than 1000 parts.
-const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
+pub const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
 
 /// Derive chunk size based on filesize, scaling to never need more than 1000
 /// parts/chunks.
@@ -502,7 +505,7 @@ const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
 /// # Errors
 ///
 /// Returns an error if the file is over the [MAX_FILE_SIZE].
-fn derive_chunk_size(filesize: usize) -> Result<usize> {
+pub fn derive_chunk_size(filesize: usize) -> Result<usize> {
     if filesize > MAX_FILE_SIZE {
         bail!("File is too large to upload! Limit is {}", MAX_FILE_SIZE);
     }

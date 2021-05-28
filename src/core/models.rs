@@ -105,7 +105,7 @@ impl UploadedFile {
 
 /// Handles deserializing datetimes, as suggested at
 /// <https://serde.rs/custom-date-format.html>.
-mod notz_rfc_3339 {
+pub mod notz_rfc_3339 {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer};
     // use serde::{self, Deserialize, Deserializer, Serializer};

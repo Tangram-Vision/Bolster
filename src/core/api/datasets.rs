@@ -74,7 +74,7 @@ pub enum DatasetOrdering {
 impl DatasetOrdering {
     /// Translates between CLI sorting option value (e.g. "date") and database
     /// column (e.g. "created_date"), if necessary.
-    fn to_database_field(&self) -> String {
+    pub fn to_database_field(&self) -> String {
         self.to_string()
     }
 }
