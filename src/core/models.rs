@@ -3,9 +3,11 @@
 // Proprietary and confidential
 // ----------------------------
 
+use anyhow::{anyhow, bail, Result};
 use chrono::{DateTime, Utc};
 use reqwest::Url;
 use serde::Deserialize;
+use std::path::PathBuf;
 use std::vec::Vec;
 use uuid::Uuid;
 
@@ -49,6 +51,27 @@ pub struct UploadedFile {
     pub metadata: serde_json::Value,
 }
 
+impl UploadedFile {
+    pub fn filepath_from_url(&self) -> Result<PathBuf> {
+        let mut segments = self
+            .url
+            .path_segments()
+            .ok_or_else(|| anyhow!("File URL is malformed!"))?;
+
+        loop {
+            if let Some(segment) = segments.next() {
+                if segment == self.dataset_id.to_hyphenated().to_string() {
+                    break;
+                }
+            } else {
+                // We got to the end and never found the dataset id?
+                bail!("File url ({}) doesn't contain dataset-id. Please contact support@tangramvision.com", self.url);
+            }
+        }
+        Ok(segments.collect::<PathBuf>())
+    }
+}
+
 // https://serde.rs/custom-date-format.html
 mod notz_rfc_3339 {
     use chrono::{DateTime, TimeZone, Utc};
@@ -89,5 +112,62 @@ mod notz_rfc_3339 {
         let s = String::deserialize(deserializer)?;
         Utc.datetime_from_str(&s, FORMAT)
             .map_err(serde::de::Error::custom)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use predicates::prelude::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_uploadedfile_filepath_from_url_success() {
+        let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
+        let url_str = format!(
+            "https://bucket.example.com/{}/src/resources/test.dat",
+            dataset_id
+        );
+        let uf = UploadedFile {
+            dataset_id,
+            created_date: Utc::now(),
+            url: Url::parse(&url_str).unwrap(),
+            filesize: 12,
+            version: "blah".to_owned(),
+            metadata: json!({}),
+        };
+        assert_eq!(
+            "src/resources/test.dat",
+            uf.filepath_from_url().unwrap().to_str().unwrap()
+        );
+    }
+
+    #[test]
+    fn test_uploadedfile_filepath_from_url_bad_url_missing_dataset_id() {
+        let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
+        let url_str = format!(
+            "https://bucket.example.com/{}/src/resources/test.dat",
+            "not-the-right-dataset-id"
+        );
+        let uf = UploadedFile {
+            dataset_id,
+            created_date: Utc::now(),
+            url: Url::parse(&url_str).unwrap(),
+            filesize: 12,
+            version: "blah".to_owned(),
+            metadata: json!({}),
+        };
+        let e = uf
+            .filepath_from_url()
+            .expect_err("Url doesn't contain the dataset-id")
+            .to_string();
+        assert_eq!(
+            true,
+            predicate::str::is_match(
+                "File url .* doesn't contain dataset-id. Please contact support@tangramvision.com"
+            )
+            .unwrap()
+            .eval(&e)
+        );
     }
 }

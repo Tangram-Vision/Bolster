@@ -18,15 +18,14 @@ use rusoto_s3::{
     UploadPartRequest, S3,
 };
 use std::cmp::min;
-use std::path::Path;
-use tokio::fs::File;
-use tokio::io::{self, AsyncRead, AsyncReadExt};
+use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
 #[cfg(feature = "tangram-internal")]
 use crate::app_config::DigitalOceanSpacesConfig;
 use crate::app_config::{AwsS3Config, StorageProviderChoices};
 
+#[derive(Debug, Clone)]
 pub struct StorageConfig {
     credentials: StaticProvider,
     bucket: String,
@@ -72,7 +71,7 @@ impl StorageConfig {
 
 // This could be sync, because we only call it on files for upload_file_oneshot,
 // so the files will be small.
-pub async fn md5_file(path: &Path) -> Result<String> {
+pub async fn md5_file(path: &str) -> Result<String> {
     let tokio_file = tokio::fs::File::open(path).await?;
     // Feed file to md5 without reading whole file into RAM
     let md5_ctx = codec::FramedRead::new(tokio_file, codec::BytesCodec::new())
@@ -97,7 +96,7 @@ pub async fn md5_file(path: &Path) -> Result<String> {
 // https://stackoverflow.com/questions/59318460/what-is-the-best-way-to-convert-an-asyncread-to-a-trystream-of-bytes
 pub async fn upload_file_oneshot(
     config: StorageConfig,
-    path: &Path,
+    path: String,
     filesize: i64,
     key: String,
 ) -> Result<(Url, String)> {
@@ -110,7 +109,7 @@ pub async fn upload_file_oneshot(
     // the bottom of the function
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
-    let md5_hash = md5_file(path).await?;
+    let md5_hash = md5_file(&path).await?;
 
     let dispatcher = request::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
@@ -128,12 +127,12 @@ pub async fn upload_file_oneshot(
         key,
         ..Default::default()
     };
-    debug!("making upload_file request {:?}", req);
+    debug!("upload_file_oneshot request {:?}", req);
     // just spawn tokio here and use it, instead of async-ing everything yet
 
     // https://www.rusoto.org/futures.html mentions turning futures into blocking calls
     let resp = client.put_object(req).await?;
-    debug!("upload_file response {:?}", resp);
+    debug!("upload_file_oneshot response {:?}", resp);
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
@@ -278,13 +277,13 @@ where
     let mut stream = read_file_chunks(tokio_file, chunk_size, filesize as usize);
     while let Some(maybe_chunk) = stream.next().await {
         if let Ok(chunk) = maybe_chunk {
-            debug!("Sending chunk {} to task", chunk.part_number);
+            debug!("Sending chunk {} of {} to task", chunk.part_number, key);
             if let Some(local_client) = client_pool.pop() {
                 let bucket = bucket.clone();
                 let key = key.clone();
                 let upload_id = upload_id.clone();
                 futs.push(tokio::spawn(async move {
-                    debug!("Spawned task for chunk {}", chunk.part_number);
+                    debug!("Spawned task for chunk {} of {}", chunk.part_number, key);
                     let part_number = chunk.part_number;
                     let md5 = base64::encode(*md5::compute(&chunk.data));
                     let streaming_body = StreamingBody::from(chunk.data);
@@ -313,7 +312,10 @@ where
             // md5 digest kind:
             // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
-                debug!("At concurrent_request_limit... awaiting a request finishing");
+                debug!(
+                    "At concurrent_request_limit for {}... awaiting request completion",
+                    key
+                );
                 // This won't return None because futs is not empty, so we can safely unwrap.
                 // The ? operator can throw:
                 //   - a JoinError (if the tokio::spawn task panics)
@@ -325,14 +327,14 @@ where
                     client_pool.len()
                 );
                 parts.push(part);
-                debug!("Parts finished = {}", parts.len());
+                debug!("Parts of {} finished = {}", key, parts.len());
             }
         } else {
             debug!("Error reading file: {:?}", maybe_chunk);
             bail!("Error reading file: {:?}", maybe_chunk);
         }
     }
-    debug!("All file chunks dispatched to tasks");
+    debug!("All file chunks for {} dispatched to tasks", key);
     while let Some(result) = futs.next().await {
         // The ? operator can throw:
         //   - a JoinError (if the tokio::spawn task panics)
@@ -340,7 +342,7 @@ where
         // Also, we don't care about returning S3Clients to the pool anymore.
         let (part, _) = result??;
         parts.push(part);
-        debug!("Parts finished = {}", parts.len());
+        debug!("Parts of {} finished = {}", key, parts.len());
     }
 
     // Parts must be returned in order to AWS S3.
@@ -407,7 +409,7 @@ fn derive_chunk_size(filesize: usize) -> Result<usize> {
 // https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf
 pub async fn upload_file_multipart(
     config: StorageConfig,
-    path: &Path,
+    path: String,
     filesize: usize,
     key: String,
 ) -> Result<(Url, String)> {
@@ -431,9 +433,9 @@ pub async fn upload_file_multipart(
         key: key.clone(),
         ..Default::default()
     };
-    debug!("Making create_multipart_upload request {:?}", req);
+    debug!("create_multipart_upload request {:?}", req);
     let resp = client.create_multipart_upload(req).await?;
-    debug!("Result of create_multipart_upload {:?}", resp);
+    debug!("create_multipart_upload response {:?}", resp);
     let upload_id = resp
         .upload_id
         .ok_or_else(|| anyhow!("Multipart upload is missing an UploadId"))?;
@@ -443,14 +445,11 @@ pub async fn upload_file_multipart(
     // ======
 
     // CONCURRENT_REQUEST_LIMIT controls how many requests can be in-flight at a
-    // time, which controls how much of the file is read and held in RAM
-    // concurrently (chunk size also plays a part).
+    // time (for a single file upload), which controls how much of the file is
+    // read and held in RAM concurrently (chunk size also plays a part).
     //
     // TODO: Make concurrent_request_limit (or RAM usage) configurable.
-    //
-    // TODO: This value will likely change with added support for multi-file
-    // upload (to limit RAM usage if many files are uploaded).
-    const CONCURRENT_REQUEST_LIMIT: usize = 30;
+    const CONCURRENT_REQUEST_LIMIT: usize = 10;
 
     let tokio_file = tokio::fs::File::open(path).await?;
     let completed_parts = upload_parts(
@@ -477,22 +476,21 @@ pub async fn upload_file_multipart(
         }),
         ..Default::default()
     };
-    debug!("Making complete_multipart_upload request {:?}", req);
+    debug!("complete_multipart_upload request {:?}", req);
     let resp = client.complete_multipart_upload(req).await?;
-    debug!("Result of complete_multipart_upload {:?}", resp);
+    debug!("complete_multipart_upload response {:?}", resp);
     // resp.location is s3.us-west-1.amazonaws.com/tangram-vision-datasets/
     // whereas url is tangram-vision-datasets.s3.us-west-1.amazonaws.com/
     // So they won't match, but we can just use the url value.
     let version = resp
         .version_id
         .ok_or_else(|| anyhow!("Uploaded file wasn't versioned by storage provider"))?;
-    debug!("Resulting version {}", version);
+    debug!("Resulting version for {}: {}", key, version);
 
     Ok((url, version))
 }
 
-#[tokio::main]
-pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
+pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_core::ByteStream> {
     // TODO: Is there a better way to do this, like how try_from works for getting upload config?
 
     // TODO: store provider, bucket, and key separately in database?
@@ -500,10 +498,6 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
         .path()
         .strip_prefix("/")
         .ok_or_else(|| anyhow!("URL path didn't start with /: {}", url.path()))?;
-    let filename = key
-        .split('/')
-        .last()
-        .ok_or_else(|| anyhow!("Key can't become filename: {}", key))?;
 
     // Increase read buffer size in rusoto:
     // https://www.rusoto.org/performance.html
@@ -524,10 +518,7 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<()> {
     debug!("download_file response {:?}", resp);
 
     let body = resp.body.ok_or_else(|| anyhow!("Empty file! {}", url))?;
-    let mut body = body.into_async_read();
-    let mut file = File::create(filename).await?;
-    io::copy(&mut body, &mut file).await?;
-    Ok(())
+    Ok(body)
 }
 
 #[cfg(test)]
@@ -539,8 +530,8 @@ mod tests {
     use rusoto_mock::{MockCredentialsProvider, MockRequestDispatcher};
     use tokio_test::io::Builder;
 
-    #[test]
-    fn test_download_file_403_forbidden() {
+    #[tokio::test]
+    async fn test_download_file_403_forbidden() {
         // To debug what rusoto and httpmock are doing, enable logger and run
         // tests with debug or trace level.
         // let _ = env_logger::try_init();
@@ -567,7 +558,9 @@ mod tests {
             bucket,
         };
 
-        let error = download_file(config, &url).expect_err("403 Forbidden response expected");
+        let error = download_file(config, &url)
+            .await
+            .expect_err("403 Forbidden response expected");
         match error.downcast_ref::<rusoto_core::RusotoError<rusoto_s3::GetObjectError>>() {
             Some(rusoto_core::RusotoError::Unknown(b)) => assert_eq!(b.status, 403),
             e => panic!("Unexpected error: {:?}", e),
@@ -797,7 +790,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_file_read_err_exits_early() {
-        // Error reading file throws immediately
         let _ = env_logger::try_init();
 
         let reader = Builder::new()
@@ -815,6 +807,7 @@ mod tests {
             Default::default(),
         );
 
+        // Error reading file throws immediately
         let e = upload_parts(
             &client,
             reader,
@@ -836,7 +829,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_network_err_exits_early() {
-        // Error reading file throws immediately
         let _ = env_logger::try_init();
 
         let reader = Builder::new()
@@ -854,6 +846,7 @@ mod tests {
             Default::default(),
         );
 
+        // Error reading networ throws immediately
         let e = upload_parts(
             &client,
             reader,
@@ -906,11 +899,4 @@ mod tests {
             predicate::str::contains("File is too large to upload").eval(&e)
         );
     }
-
-    // TODO: test that errors coming out of upload_completed_part actually error out of the upload process (stop all workers/tasks)
-
-    // TODO: test create_multipart_upload failing with Credentials type RusotoError
-    // https://docs.rs/rusoto_core/0.46.0/rusoto_core/enum.RusotoError.html
-
-    // TODO: test if maybe_chunk is Err
 }

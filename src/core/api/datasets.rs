@@ -16,7 +16,7 @@ use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
 pub struct DatabaseApiConfig {
     pub base_url: Url,
-    pub client: reqwest::blocking::Client,
+    pub client: reqwest::Client,
 }
 
 impl DatabaseApiConfig {
@@ -36,7 +36,7 @@ impl DatabaseApiConfig {
             header::HeaderValue::from_str("return=representation")?,
         );
         Ok(Self {
-            client: reqwest::blocking::Client::builder()
+            client: reqwest::Client::builder()
                 .user_agent(user_agent)
                 .default_headers(headers)
                 .timeout(Duration::from_secs(timeout))
@@ -131,7 +131,7 @@ pub fn datasets_patch(
 }
 */
 
-pub fn datasets_get(
+pub async fn datasets_get(
     configuration: &DatabaseApiConfig,
     params: &DatasetGetRequest,
 ) -> Result<Vec<Dataset>> {
@@ -167,11 +167,11 @@ pub fn datasets_get(
         req_builder = req_builder.query(&[("offset", offset)]);
     }
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     let datasets: Vec<Dataset> = serde_json::from_str(&content)
@@ -179,7 +179,7 @@ pub fn datasets_get(
     Ok(datasets)
 }
 
-pub fn datasets_post(
+pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to just the metadata value and package that value into
     // the "metadata" key in the request body in this function.
@@ -195,11 +195,11 @@ pub fn datasets_post(
 
     req_builder = req_builder.json(&request_body);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     // TODO: save json to file and prompt user to send it to us?
@@ -212,29 +212,48 @@ pub fn datasets_post(
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
 }
 
-pub fn files_get(
+pub async fn files_get(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
-    filename: &str,
+    prefixes: Vec<String>,
 ) -> Result<Vec<UploadedFile>> {
     debug!(
-        "building files get request for: {} {}",
-        dataset_id, filename
+        "building files get request for: {} {:?}",
+        dataset_id, prefixes
     );
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
     api_url.set_path("files");
-    let mut req_builder = client.get(api_url.as_str());
+    let req_builder = client.get(api_url.as_str());
 
-    req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
-    req_builder = req_builder.query(&[("url", format!("ilike.*{}", filename))]);
+    let req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    // Example query strings:
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&url=ilike.*/{prefix}*
+    // bolster.tangramvision.com/files/?dataset_id={dataset-uuid}&or=(url.ilike.*/{prefix}*,url.ilike.*/{prefix2}*,...)
+    let req_builder = if prefixes.is_empty() {
+        req_builder
+    } else {
+        req_builder.query(&[(
+            "or",
+            format!(
+                "({})",
+                prefixes
+                    .into_iter()
+                    .map(|s| format!("url.ilike.*/{}*", s))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        )])
+    };
+
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("content: {}", content);
 
     let files: Vec<UploadedFile> = serde_json::from_str(&content)
@@ -242,7 +261,7 @@ pub fn files_get(
     Ok(files)
 }
 
-pub fn files_post(
+pub async fn files_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to a Dataset struct
     dataset_id: Uuid,
@@ -267,12 +286,12 @@ pub fn files_post(
     });
     req_builder = req_builder.json(&req_body);
 
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
     // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
 
     debug!("status: {}", response.status());
-    let content = response.text()?;
+    let content = response.text().await?;
     debug!("response content: {}", content);
 
     let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
@@ -289,8 +308,8 @@ mod tests {
     use httpmock::MockServer;
     use std::str::FromStr;
 
-    #[test]
-    fn test_datasets_get_success() {
+    #[tokio::test]
+    async fn test_datasets_get_success() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -317,7 +336,7 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).unwrap();
+        let result = datasets_get(&config, &params).await.unwrap();
 
         mock.assert();
         assert_eq!(
@@ -327,8 +346,8 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn test_datasets_get_query_params() {
+    #[tokio::test]
+    async fn test_datasets_get_query_params() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -363,7 +382,7 @@ mod tests {
             ..Default::default()
         };
 
-        let result = datasets_get(&config, &params).unwrap();
+        let result = datasets_get(&config, &params).await.unwrap();
 
         mock.assert();
         assert_eq!(
@@ -373,8 +392,8 @@ mod tests {
         assert_eq!(result.len(), 1);
     }
 
-    #[test]
-    fn test_datasets_get_wrong_structure_json() {
+    #[tokio::test]
+    async fn test_datasets_get_wrong_structure_json() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -400,7 +419,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected json parsing error");
         let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
 
         mock.assert();
@@ -411,8 +432,8 @@ mod tests {
             .contains("JSON from Datasets API was malformed: {"));
     }
 
-    #[test]
-    fn test_datasets_get_malformed_json() {
+    #[tokio::test]
+    async fn test_datasets_get_malformed_json() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -431,7 +452,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected json parsing error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected json parsing error");
         let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
 
         mock.assert();
@@ -441,8 +464,8 @@ mod tests {
             .contains("JSON from Datasets API was malformed: this isn't actually json"));
     }
 
-    #[test]
-    fn test_datasets_get_401_response() {
+    #[tokio::test]
+    async fn test_datasets_get_401_response() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -461,7 +484,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected status code error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected status code error");
         let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
@@ -476,8 +501,8 @@ mod tests {
         // to prompt user to check their API key for 401 responses.
     }
 
-    #[test]
-    fn test_datasets_get_timeout() {
+    #[tokio::test]
+    async fn test_datasets_get_timeout() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -497,7 +522,9 @@ mod tests {
         .unwrap();
         let params = DatasetGetRequest::default();
 
-        let result = datasets_get(&config, &params).expect_err("Expected timeout error");
+        let result = datasets_get(&config, &params)
+            .await
+            .expect_err("Expected timeout error");
         let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
