@@ -8,6 +8,7 @@
 use std::{convert::TryInto, iter, sync::Arc};
 
 use anyhow::Result;
+use byte_unit::MEBIBYTE;
 use futures::{stream, stream::StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
@@ -194,7 +195,7 @@ pub async fn upload_file(
     // The threshold is set a bit arbitrarily -- it is above 64MB that the
     // multipart upload starts being faster than one-shot uploads. Below 64MB,
     // the extra overhead of extra API calls makes multipart uploads slower.
-    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * 1024 * 1024;
+    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * (MEBIBYTE as usize);
 
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);

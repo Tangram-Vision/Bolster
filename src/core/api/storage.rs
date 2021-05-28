@@ -8,6 +8,7 @@
 use std::cmp::{max, min};
 
 use anyhow::{anyhow, bail, Result};
+use byte_unit::{GIBIBYTE, MEBIBYTE};
 use futures::stream::{
     futures_unordered::FuturesUnordered, try_unfold, Stream, StreamExt, TryStreamExt,
 };
@@ -456,10 +457,6 @@ where
     Ok(parts)
 }
 
-// TODO: Replace these with byte_unit crate's versions
-pub const MEGABYTE: usize = 1024 * 1024;
-pub const GIGABYTE: usize = 1024 * MEGABYTE;
-
 /// Size of each file chunk when uploading large files.
 ///
 /// S3 has some limits for multipart uploads: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
@@ -496,7 +493,7 @@ pub const GIGABYTE: usize = 1024 * MEGABYTE;
 /// So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000
 /// parts.  For files above 16GB, we start increasing the chunk size (ceiling'd
 /// to the nearest MB). We cap out at 5000GB (4.88TB).
-pub const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
+pub const DEFAULT_CHUNK_SIZE: usize = 16 * (MEBIBYTE as usize);
 
 /// Maximum file size bolster can upload.
 ///
@@ -504,7 +501,7 @@ pub const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
 /// The max part size is 5GB though, and if we limit ourselves to 1000 parts,
 /// then we can only support files up to 5000GB. If needed in the future, we can
 /// spend the time/effort to support more than 1000 parts.
-pub const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
+pub const MAX_FILE_SIZE: usize = 5000 * (GIBIBYTE as usize);
 
 /// Derive chunk size based on filesize, scaling to never need more than 1000
 /// parts/chunks.
@@ -518,11 +515,11 @@ pub fn derive_chunk_size(filesize: usize) -> Result<usize> {
     if filesize > MAX_FILE_SIZE {
         bail!("File is too large to upload! Limit is {}", MAX_FILE_SIZE);
     }
-    let filesize_mb = (filesize as f64) / (MEGABYTE as f64);
+    let filesize_mb = (filesize as f64) / (MEBIBYTE as f64);
     let chunk_size_mb_for_1000_parts = (filesize_mb / 1000.0).ceil() as usize;
     Ok(max(
         DEFAULT_CHUNK_SIZE,
-        chunk_size_mb_for_1000_parts * MEGABYTE,
+        chunk_size_mb_for_1000_parts * (MEBIBYTE as usize),
     ))
 }
 
@@ -663,7 +660,7 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
     // https://www.rusoto.org/performance.html
     // TODO: test the effect of this change!
     let mut http_config = rusoto_core::HttpConfig::new();
-    http_config.read_buf_size(2 * 1024 * 1024);
+    http_config.read_buf_size(2 * (MEBIBYTE as usize));
     let dispatcher = rusoto_core::HttpClient::new_with_config(http_config).unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
@@ -1045,19 +1042,21 @@ mod tests {
         );
         assert_eq!(
             derive_chunk_size(DEFAULT_CHUNK_SIZE * 1000 + 1).unwrap(),
-            DEFAULT_CHUNK_SIZE + MEGABYTE
+            DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)
         );
         assert_eq!(
-            derive_chunk_size((DEFAULT_CHUNK_SIZE + MEGABYTE) * 1000).unwrap(),
-            DEFAULT_CHUNK_SIZE + MEGABYTE
+            derive_chunk_size((DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)) * 1000).unwrap(),
+            DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)
         );
         assert_eq!(
             // 5 TB (almost)
-            derive_chunk_size(5000 * GIGABYTE).unwrap(),
-            5 * GIGABYTE
+            derive_chunk_size(5000 * (GIBIBYTE as usize)).unwrap(),
+            5 * (GIBIBYTE as usize)
         );
 
-        let e = derive_chunk_size(5001 * GIGABYTE).unwrap_err().to_string();
+        let e = derive_chunk_size(5001 * (GIBIBYTE as usize))
+            .unwrap_err()
+            .to_string();
         assert_eq!(
             true,
             predicate::str::contains("File is too large to upload").eval(&e)
