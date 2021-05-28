@@ -88,7 +88,6 @@ pub struct DatasetGetRequest {
     pub before_date: Option<NaiveDate>,
     /// Filter to datasets after a date
     pub after_date: Option<NaiveDate>,
-    // TODO: implement metadata: Option<String>,
     /// Order query results by a field (e.g. created_date) and direction (e.g.
     /// ascending).
     pub order: Option<DatasetOrdering>,
@@ -99,6 +98,10 @@ pub struct DatasetGetRequest {
     /// Warning: Results may shift between subsequent bolster invocations if new
     /// datasets are being added at the same time.
     pub offset: Option<usize>,
+    // TODO: Implement metadata CLI input
+    // Related to
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 }
 
 impl Default for DatasetGetRequest {
@@ -142,10 +145,10 @@ pub async fn datasets_get(
     if let Some(after_date) = &params.after_date {
         req_builder = req_builder.query(&[("created_date", format!("gte.{}", after_date))]);
     }
-    // TODO: implement metadata
-    // if let Some(metadata) = params.metadata {
-    //     req_builder = req_builder.query(&[("metadata", format!("eq.{}", metadata))]);
-    // }
+    // TODO: Implement metadata CLI input
+    // Related to
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 
     if let Some(order) = &params.order {
         req_builder = req_builder.query(&[("order", order.to_database_field())]);
@@ -181,9 +184,6 @@ pub async fn datasets_get(
 /// data is malformed (e.g. not json).
 pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
-    // TODO: change this to just the metadata value and package that value into
-    // the "metadata" key in the request body in this function.
-    // Or send in a Dataset struct so serde can serialize that directly.
     request_body: serde_json::Value,
 ) -> Result<DatasetNoFiles> {
     debug!("building post request for: {:?}", request_body);
@@ -202,7 +202,6 @@ pub async fn datasets_post(
     let content = response.text().await?;
     debug!("content: {}", content);
 
-    // TODO: save json to file and prompt user to send it to us?
     let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
     // PostgREST resturns a list, even when only a single object is expected
@@ -278,7 +277,6 @@ pub async fn files_get(
 /// data is malformed (e.g. not json).
 pub async fn files_post(
     configuration: &DatabaseApiConfig,
-    // TODO: change this to a Dataset struct
     dataset_id: Uuid,
     url: &Url,
     filesize: usize,
@@ -303,7 +301,8 @@ pub async fn files_post(
 
     let response = req_builder.send().await?;
     response.error_for_status_ref()?;
-    // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
+    // TODO: Add context to 409 response (dataset doesn't exist) OR validate it
+    // does before uploading to storage provider.
 
     debug!("status: {}", response.status());
     let content = response.text().await?;

@@ -145,13 +145,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     return Ok(());
                 }
             }
-            // for each path,
-            //   if it's a folder, collect all files inside recursively
-            //   if it's a file, collect it
-            // prompt that file list is correct
-            // pass file list to command
 
-            // TODO: test non-utf8 filename or force utf8
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let prefix = db.user_id_from_jwt()?.to_string();
             commands::create_and_upload_dataset(
@@ -183,13 +177,15 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 }
             }
 
-            // TODO: implement metadata CLI input
+            // TODO: Implement metadata CLI input
+            // Related to
+            // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+            // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
-            // TODO: implement order
             let order: Option<DatasetOrdering> = handle_optional_arg(ls_matches, "order");
 
             let get_params = DatasetGetRequest {
@@ -206,8 +202,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             if datasets.is_empty() {
                 println!("No datasets found!");
             } else {
-                // TODO: use generic, customizable formatter (e.g. kubernetes get)
-                // TODO: show creator for tangram-internal build
+                // TODO: Show creator for tangram-internal build
+                // Related to https://gitlab.com/tangram-vision/bolster/-/issues/11
 
                 // If user is listing a single dataset, show its files...
                 if let Some(dataset_id) = dataset_id {
@@ -342,7 +338,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .possible_values(StorageProviderChoices::VARIANTS)
                         .takes_value(true),
                 ),
-                // TODO: add -y/--yes to skip prompt
         )
         .subcommand(
             App::new("ls")
@@ -361,7 +356,10 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("before-date")
                         .value_name("DATE")
                         .takes_value(true),
-                    // TODO: implement metadata
+                    // TODO: Implement metadata CLI input
+                    // Related to
+                    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+                    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
                     Arg::new("metadata")
                         .about("NOT IMPLEMENTED: Show dataset matching metadata")
                         .short('m')
@@ -417,8 +415,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .about("Download files in remote dataset")
                 .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
                 .arg(Arg::new("prefix").about("All files with names starting with a prefix will be downloaded").takes_value(true).multiple(true))
-            // TODO: add arg to filter file(s) to download from dataset?
-            // TODO: add path to download files to?
+            // TODO: Add path to download files to?
         )
         .subcommand(App::new("config").about("Show Configuration"));
 

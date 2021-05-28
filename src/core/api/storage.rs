@@ -66,8 +66,6 @@ impl StorageConfig {
                     region: Region::Custom {
                         name: "sfo2".to_owned(),
                         endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
-                        // TODO: use cdn endpoint for downloads?
-                        // endpoint: "sfo2.cdn.digitaloceanspaces.com".to_owned(),
                     },
                 })
             }
@@ -305,9 +303,6 @@ pub async fn upload_completed_part(
     client: &S3Client,
     req: UploadPartRequest,
 ) -> Result<CompletedPart> {
-    // TODO: add retry handling?
-    // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
-    // TODO: count some number of retries
     let part_number = req.part_number;
     debug!("Making part {} upload_part request {:?}", part_number, req);
     let resp = client.upload_part(req).await;
@@ -330,7 +325,7 @@ pub async fn upload_completed_part(
         }
         Err(e) => {
             debug!("Handling error in upload_completed_part: {}", e);
-            // TODO: timeout error is encompassed by HttpDispatchError
+            // Timeout error is encompassed by HttpDispatchError
             // https://github.com/rusoto/rusoto/issues/1530
             bail!("Upload part {} request failed: {}", part_number, e);
         }
@@ -352,7 +347,7 @@ pub async fn upload_parts<F>(
     key: String,
     upload_id: String,
     filesize: usize,
-    // TODO: bundle these in a config object?
+    // TODO: Bundle these in a config object?
     chunk_size: usize,
     concurrent_request_limit: usize,
     progress_bar: ProgressBar,
@@ -408,6 +403,7 @@ where
                     // TODO: Progress bar updates are "chunky" (only updates
                     // after each chunk/part finishes). Is there a way to make
                     // this more smooth/fine-grained?
+                    // Related to https://gitlab.com/tangram-vision/bolster/-/issues/2
                     local_progress_bar.inc(part_size as u64);
 
                     Ok::<_, anyhow::Error>((part, local_client))
@@ -417,13 +413,6 @@ where
                 bail!("S3Client pool ran dry somehow!");
             }
 
-            // We won't handle errors from upload_completed_part until now.
-            // TODO: Improve this, perhaps by moving task creation to a task and
-            // awaiting on the union of the producer and consumer tasks.
-            //
-            // TODO: Retry UploadPart if an error raised here is of the invalid
-            // md5 digest kind:
-            // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
                 debug!(
                     "At concurrent_request_limit for {}... awaiting request completion",
@@ -648,9 +637,6 @@ pub async fn upload_file_multipart(
 /// credentials are invalid, if server is unreachable, if checksum doesn't
 /// match) or if the returned data is malformed.
 pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_core::ByteStream> {
-    // TODO: Is there a better way to do this, like how try_from works for getting upload config?
-
-    // TODO: store provider, bucket, and key separately in database?
     let key = url
         .path()
         .strip_prefix("/")
@@ -658,11 +644,9 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
 
     // Increase read buffer size in rusoto:
     // https://www.rusoto.org/performance.html
-    // TODO: test the effect of this change!
     let mut http_config = rusoto_core::HttpConfig::new();
     http_config.read_buf_size(2 * (MEBIBYTE as usize));
     let dispatcher = rusoto_core::HttpClient::new_with_config(http_config).unwrap();
-    // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
     let req = GetObjectRequest {
         bucket: config.bucket,

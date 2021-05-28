@@ -59,7 +59,6 @@ pub fn get_default_progress_bar_style() -> ProgressStyle {
 /// Thin wrapper around [datasets::datasets_post] -- see its documentation for
 /// behavior and possible errors.
 pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
-    // TODO: create Dataset model to pass in or just json?
     let dataset = datasets::datasets_post(config, json!({})).await?;
     Ok(dataset.dataset_id)
 }
@@ -117,8 +116,6 @@ pub async fn create_and_upload_dataset(
     prefix: &str,
     file_paths: Vec<String>,
 ) -> Result<()> {
-    // TODO: create dataset and all files (w/ not-uploaded state) in single API call?
-
     let dataset_id: Uuid = create_dataset(db_config).await?;
 
     println!("Created new dataset with UUID: {}", dataset_id);
@@ -233,11 +230,6 @@ pub async fn upload_file(
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     }
-
-    // TODO: add progress bar for upload/download
-    // TODO: spawn upload/download task with channel back to "main" task, which receives progress updates (that it can print to stdout) until upload/download task ends
-
-    // TODO: trigger calibration pipeline after all files have uploaded successfully
 
     Ok(())
 }
