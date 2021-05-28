@@ -3,6 +3,8 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! High-level operations that roughly align with CLI subcommands.
+
 use std::{convert::TryInto, iter, sync::Arc};
 
 use anyhow::Result;
@@ -24,18 +26,30 @@ use super::{
 };
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
+/// Provides the default progress bar style
+///
+/// For a list of template fields (e.g. elapsed time, bytes remaining), see
+/// [indicatif's documentation on
+/// Templates](https://docs.rs/indicatif/0.16.2/indicatif/#templates).
 pub fn get_default_progress_bar_style() -> ProgressStyle {
     ProgressStyle::default_bar()
     .template("{prefix} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} ({eta})")
     .progress_chars("#>-")
 }
 
+/// Creates a dataset and returns its id.
+///
+/// Thin wrapper around [datasets::datasets_post] -- see its documentation for
+/// behavior and possible errors.
 pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
     // TODO: create Dataset model to pass in or just json?
     let dataset = datasets::datasets_post(config, json!({})).await?;
     Ok(dataset.dataset_id)
 }
 
+/// Eases usage of [multiple progress bars][MultiProgress] in an async
+/// environment.
+///
 /// Manages annoyances with indicatif, namely that:
 /// - some thread of execution needs to join the MultiProgress to get progress
 /// bars to render
@@ -49,6 +63,8 @@ struct MultiProgressGuard {
 }
 
 impl MultiProgressGuard {
+    /// Initializes a [MultiProgress] (with a hidden progress bar) and joins it
+    /// to begin rendering.
     async fn new() -> Self {
         let mp = Arc::new(MultiProgress::new());
         let spinner = mp.add(ProgressBar::hidden());
@@ -72,6 +88,12 @@ impl Drop for MultiProgressGuard {
     }
 }
 
+/// Creates a dataset and async uploads all provided files.
+///
+/// See [Performance][crate#performance] for details on upload concurrency.
+///
+/// Wraps [create_dataset] and [upload_file] -- see those functions for behavior
+/// and possible errors.
 pub async fn create_and_upload_dataset(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
@@ -110,6 +132,10 @@ pub async fn create_and_upload_dataset(
     Ok(())
 }
 
+/// List all datasets, optionally filtered by options in [DatasetGetRequest].
+///
+/// Thin wrapper around [datasets::datasets_get] -- see its documentation for
+/// behavior and possible errors.
 pub async fn list_datasets(
     config: &DatabaseApiConfig,
     params: &DatasetGetRequest,
@@ -128,6 +154,10 @@ pub async fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -
 }
 */
 
+/// Registers uploaded file (critically, its url) in the datasets database.
+///
+/// Thin wrapper around [datasets::files_post] -- see its documentation for
+/// behavior and possible errors.
 pub async fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -140,6 +170,23 @@ pub async fn add_file_to_dataset(
     Ok(())
 }
 
+/// Uploads a single file at the given path to the cloud storage provider
+/// indicated in `config` and registers the uploaded file in the datasets
+/// database.
+///
+/// Folder structure is preserved when uploading, so uploading `dir/file` is
+/// different from doing `cd dir` then uploading `file`.
+///
+/// Dispatches to [storage::upload_file_oneshot] if the file is < 64 MB or
+/// [storage::upload_file_multipart] otherwise.
+///
+/// # Errors
+///
+/// Returns an error if the file is unreadable.
+///
+/// Invokes [storage::upload_file_oneshot], [storage::upload_file_multipart],
+/// and [add_file_to_dataset] -- see those functions' documentation for
+/// additional behavior and possible errors.
 pub async fn upload_file(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
@@ -200,6 +247,13 @@ pub async fn upload_file(
     Ok(())
 }
 
+/// List all files in the given dataset, optionally filtered by prefixes.
+///
+/// If multiple prefixes are provided, all files matching any prefix are
+/// returned (i.e. it's a union).
+///
+/// Thin wrapper around [datasets::files_get] -- see its documentation for
+/// behavior and possible errors.
 pub async fn list_files(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -208,6 +262,15 @@ pub async fn list_files(
     datasets::files_get(config, dataset_id, prefixes).await
 }
 
+/// Download all files specified in `uploaded_files`.
+///
+/// See [Performance][crate#performance] for details on download concurrency.
+///
+/// # Errors
+///
+/// Returns an error if the url doesn't match a configured cloud storage provider.
+///
+/// Wraps [download_file] -- see its documentation for other possible errors.
 pub async fn download_files(
     config: config::Config,
     uploaded_files: Vec<UploadedFile>,
@@ -242,6 +305,19 @@ pub async fn download_files(
     }
 }
 
+/// Downloads a single file.
+///
+/// Folder structure is preserved when downloading, so downloading `dir/file`
+/// will create a folder named `dir` (if it doesn't already exist) and download
+/// `file` into that folder.
+///
+/// # Errors
+///
+/// Returns an error if the url is malformed or if the destination file cannot
+/// be opened or written.
+///
+/// Wraps [storage::download_file] -- see its documentation for other possible
+/// errors.
 pub async fn download_file(
     storage_config: StorageConfig,
     uploaded_file: &UploadedFile,
@@ -275,7 +351,7 @@ pub async fn download_file(
     Ok(())
 }
 
-/// Show the configuration file
+/// Show current configuration.
 pub fn print_config(config: config::Config) -> Result<()> {
     let storage_config: CompleteAppConfig = config.try_into()?;
     println!("{}", toml::to_string(&storage_config)?);

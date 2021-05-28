@@ -3,8 +3,9 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Backend data representations and interactions with database and storage
+//! providers.
+
 pub mod api;
 pub mod commands;
 pub mod models;
-
-// TODO: make these not all public?

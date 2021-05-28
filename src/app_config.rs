@@ -3,6 +3,8 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Structs and helper methods for using data in the bolster config file.
+
 use std::cmp::PartialEq;
 
 use anyhow::{anyhow, bail, Context, Result};
@@ -11,17 +13,23 @@ use serde::{Deserialize, Serialize};
 use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
-// TODO: should this be "UploadStorageProviderChoices"?
+/// Available choices of cloud storage providers.
+///
+/// To use a cloud storage provider, valid credentials must be present in the
+/// bolster config file.
 #[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, PartialEq)]
 pub enum StorageProviderChoices {
+    /// DigitalOcean Spaces
     #[cfg(feature = "tangram-internal")]
     #[strum(serialize = "digitalocean")]
     DigitalOcean,
+    /// AWS S3
     #[strum(serialize = "aws")]
     Aws,
 }
 
 impl StorageProviderChoices {
+    /// The domain name corresponding to the storage provider.
     pub fn url_pattern(&self) -> &'static str {
         match *self {
             #[cfg(feature = "tangram-internal")]
@@ -29,6 +37,7 @@ impl StorageProviderChoices {
             StorageProviderChoices::Aws => "amazonaws.com",
         }
     }
+    /// Derives the storage provider enum value from a url.
     pub fn from_url(url: &Url) -> Result<StorageProviderChoices> {
         match url
             .domain()
@@ -63,10 +72,6 @@ impl Default for StorageProviderChoices {
 }
 
 /// Used only for `config` subcommand to show all config.
-/// When interacting with the database, the DatabaseConfig below is used. When
-/// the code knows which storage provider to use for upload/download, it
-/// deserializes the config with DigitalOceanSpacesConfig or AwsS3Config, as
-/// appropriate.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompleteAppConfig {
     pub database: Database,
@@ -75,28 +80,35 @@ pub struct CompleteAppConfig {
     pub aws_s3: Option<StorageApiKeys>,
 }
 
+/// Container for configuration values for connecting + authenticating with the
+/// datasets database.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DatabaseConfig {
     pub database: Database,
 }
 
+/// Database connection and authentication details.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Database {
     pub jwt: String,
     pub url: Url,
 }
 
+/// Container for configuration values for connecting to DigitalOcean Spaces
+/// cloud storage.
 #[cfg(feature = "tangram-internal")]
 #[derive(Debug, Deserialize)]
 pub struct DigitalOceanSpacesConfig {
     pub digitalocean_spaces: StorageApiKeys,
 }
 
+/// Container for configuration values for connecting to AWS S3 cloud storage.
 #[derive(Debug, Deserialize)]
 pub struct AwsS3Config {
     pub aws_s3: StorageApiKeys,
 }
 
+/// Auth keys for S3-compatible cloud storage providers.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct StorageApiKeys {
     pub access_key: String,
@@ -104,6 +116,29 @@ pub struct StorageApiKeys {
 }
 
 impl Database {
+    /// Extracts the user id (a [Uuid]) from the database JWT.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let db = Database {
+    ///     url: Url::from_str("http://example.com").unwrap(),
+    ///     jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lk\
+    ///                        IjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5Z\
+    ///                        jQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3Nj\
+    ///                        Q4fQ.NE3gOa2dg7xh1hRpr0haDWLLOxqmK8BBvmD-rQfYpuQ"),
+    /// };
+    /// assert_eq!(
+    ///     Uuid::parse_str("f60a843a-25ac-4c54-a169-5e9097b69f43").unwrap(),
+    ///     db.user_id_from_jwt().unwrap()
+    /// );
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the database JWT is malformed (not made up of 3
+    /// parts, not base64-encoded, not valid UTF-8, doesn't contain valid json,
+    /// is missing a required field, or if the data in the JWT is malformed).
     pub fn user_id_from_jwt(self) -> Result<Uuid> {
         let jwt_parts: Vec<&str> = self.jwt.split('.').collect();
         if jwt_parts.len() != 3 {

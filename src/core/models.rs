@@ -3,6 +3,8 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Serialization to/from the datasets database.
+
 use std::{path::PathBuf, vec::Vec};
 
 use anyhow::{anyhow, bail, Result};
@@ -11,47 +13,76 @@ use reqwest::Url;
 use serde::Deserialize;
 use uuid::Uuid;
 
+/// A dataset with embedded files.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct Dataset {
-    /// Note: This is a Primary Key.<pk/>
+    /// Dataset identifier, used for filtering by dataset and downloading files
+    /// from the dataset.
     pub dataset_id: Uuid,
+    /// Creation date of the dataset.
+    ///
+    /// The dataset is created before any files are uploaded.
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
-    /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
-    /// How does the user provide this metadata? Good question.
+    /// Unimplemented -- may be used for holding sensor/platform/contextual data
+    /// in the future.
     pub metadata: serde_json::Value,
+    /// List of files in the dataset.
     pub files: Vec<UploadedFile>,
 }
 
+/// A dataset without embedded files.
+///
+/// Used to represent API responses where the datasets API cannot return
+/// embedded files in the response (e.g. dataset creation).
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct DatasetNoFiles {
-    /// Note: This is a Primary Key.<pk/>
+    /// Dataset identifier, used for filtering by dataset and downloading files
+    /// from the dataset.
     pub dataset_id: Uuid,
+    /// Creation date of the dataset.
+    ///
+    /// The dataset is created before any files are uploaded.
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    /// File format, capture platform and OS, duration, number of streams, extrinsics/intrinsics, etc.
-    /// Uses serde_json::Value type so it can represent arbitrary json as described at https://github.com/serde-rs/json/issues/144
-    /// How does the user provide this metadata? Good question.
+    /// Unimplemented -- may be used for holding sensor/platform/contextual data
+    /// in the future.
     pub metadata: serde_json::Value,
 }
 
+/// A file in a dataset.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct UploadedFile {
-    // Don't need to reference this value anywhere, so ignoring it
-    // pub file_id: Uuid,
+    /// The parent [Dataset]'s identifier.
     pub dataset_id: Uuid,
 
+    /// Creation date of the file.
+    ///
+    /// The date will be after upload completes to cloud storage.
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
+    /// Full url to the file in cloud storage.
     pub url: Url,
+    /// Size of the file in bytes.
     pub filesize: u64,
-    // Likely unused, requesting the url w/o version downloads the latest version
+    /// Version identifier given by cloud storage provider.
+    ///
+    /// Uploading a file with the same filepath as another file will not
+    /// overwrite, this just creates a new version with a different version
+    /// identifier.
     pub version: String,
+    /// Unimplemented -- may be used for holding sensor/platform/contextual data
+    /// in the future.
     pub metadata: serde_json::Value,
 }
 
 impl UploadedFile {
+    /// Extracts the filepath portion of the url.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the url is somehow malformed (missing a path or the
+    /// required dataset id prefix).
     pub fn filepath_from_url(&self) -> Result<PathBuf> {
         let mut segments = self
             .url
@@ -72,7 +103,8 @@ impl UploadedFile {
     }
 }
 
-// https://serde.rs/custom-date-format.html
+/// Handles deserializing datetimes, as suggested at
+/// <https://serde.rs/custom-date-format.html>.
 mod notz_rfc_3339 {
     use chrono::{DateTime, TimeZone, Utc};
     use serde::{self, Deserialize, Deserializer};

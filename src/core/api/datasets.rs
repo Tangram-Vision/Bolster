@@ -3,6 +3,10 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Interact with the datasets database.
+//!
+//! The datasets database stores datasets, their files, and associated metadata.
+
 use std::time::Duration;
 
 use anyhow::{anyhow, Context, Result};
@@ -15,12 +19,16 @@ use uuid::Uuid;
 
 use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
+/// Configuration for interacting with the datasets database.
 pub struct DatabaseApiConfig {
+    /// URL endpoint
     pub base_url: Url,
+    /// HTTP client
     pub client: reqwest::Client,
 }
 
 impl DatabaseApiConfig {
+    /// Configure HTTP client with auth, user-agent, and headers.
     pub fn new_with_params(
         base_url: Url,
         bearer_access_token: String,
@@ -52,37 +60,44 @@ impl DatabaseApiConfig {
     }
 }
 
-// Only allow a single sort key for now
+/// Available dataset sorting options
 #[derive(EnumString, EnumVariantNames, Display, Debug)]
 pub enum DatasetOrdering {
+    /// Sort by dataset creation date, ascending (i.e. oldest first)
     #[strum(serialize = "created_date.asc")]
     CreatedDateAsc,
+    /// Sort by dataset creation date, descending (i.e. most recent first)
     #[strum(serialize = "created_date.desc")]
     CreatedDateDesc,
 }
 
 impl DatasetOrdering {
-    // For possible dataset ordering options where the CLI name (e.g. "creator")
-    // doesn't match the API/database name (e.g. "creator_role"), translate
-    // between them
+    /// Translates between CLI sorting option value (e.g. "date") and database
+    /// column (e.g. "created_date"), if necessary.
     fn to_database_field(&self) -> String {
-        match self {
-            // DatasetOrdering::CreatorAsc => "creator_role.asc".to_owned(),
-            // DatasetOrdering::CreatorDesc => "creator_role.desc".to_owned(),
-            other => other.to_string(),
-            // TODO: test order by creator
-        }
+        self.to_string()
     }
 }
 
+/// Options for filtering dataset list query.
 #[derive(Debug)]
 pub struct DatasetGetRequest {
+    /// Filter to a specific dataset
     pub dataset_id: Option<Uuid>,
+    /// Filter to datasets before a date
     pub before_date: Option<NaiveDate>,
+    /// Filter to datasets after a date
     pub after_date: Option<NaiveDate>,
     // TODO: implement metadata: Option<String>,
+    /// Order query results by a field (e.g. created_date) and direction (e.g.
+    /// ascending).
     pub order: Option<DatasetOrdering>,
+    /// Number of datasets to show (default=20, max=100).
     pub limit: Option<usize>,
+    /// Skip N results (for pagination).
+    ///
+    /// Warning: Results may shift between subsequent bolster invocations if new
+    /// datasets are being added at the same time.
     pub offset: Option<usize>,
 }
 
@@ -132,6 +147,13 @@ pub fn datasets_patch(
 }
 */
 
+/// Get a list of datasets and their files.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn datasets_get(
     configuration: &DatabaseApiConfig,
     params: &DatasetGetRequest,
@@ -180,6 +202,16 @@ pub async fn datasets_get(
     Ok(datasets)
 }
 
+/// Create a new dataset in the datasets database.
+///
+/// The returned dataset contains the dataset's id, which should be recorded to
+/// query for this dataset or download its files in the future.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to just the metadata value and package that value into
@@ -213,6 +245,14 @@ pub async fn datasets_post(
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
 }
 
+/// Get a list of files in a specified dataset, optionally filtered by
+/// prefix(es).
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn files_get(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -262,6 +302,13 @@ pub async fn files_get(
     Ok(files)
 }
 
+/// Create a new file in a specified dataset.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn files_post(
     configuration: &DatabaseApiConfig,
     // TODO: change this to a Dataset struct

@@ -3,6 +3,8 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Command-line interface (subcommands, arguments, and handling)
+
 use std::{
     fmt::Display,
     io::{self, Write},
@@ -29,7 +31,7 @@ use crate::{
     },
 };
 
-/// Extract optional arg with a specific type, exiting on parse error
+/// Extract optional arg with a specific type, exiting on parse error.
 pub fn handle_optional_arg<T>(matches: &clap::ArgMatches, arg_name: &str) -> Option<T>
 where
     T: FromStr,
@@ -45,7 +47,20 @@ where
     }
 }
 
-/// Match commands
+/// Process provided CLI subcommands and options.
+///
+/// # Errors
+///
+/// Exits with an error message if any command-line arguments are missing but
+/// required or if arguments are malformed (e.g. expected a UUID but the
+/// provided value isn't one).
+///
+/// Returns an error if creating a dataset and the provided filepaths are
+/// absolute (they must be relative so folder structure can be preserved in
+/// cloud storage) or if any filepaths are not valid UTF-8.
+///
+/// Returns an error if any lower-level commands (e.g. for uploading or
+/// downloading)
 #[tokio::main]
 pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
     // Handle config subcommand first, because it doesn't need any valid configuration, and is helpful for debugging bad config!
@@ -282,8 +297,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
     Ok(())
 }
 
-/// Configure Clap
-/// This function will configure clap and match arguments
+/// Configures CLI arguments and help messages.
 pub fn cli_config() -> Result<clap::ArgMatches> {
     // Can't get default enum variant's &'static str, so own it here
     let default_storage_provider = StorageProviderChoices::default();

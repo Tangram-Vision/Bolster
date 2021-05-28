@@ -3,5 +3,7 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Datasets and storage API actions and helpers.
+
 pub mod datasets;
 pub mod storage;
