@@ -49,7 +49,7 @@
 //! | Subcommand | Description |
 //! |-|-|
 //! | `bolster config` | Echoes current config (with any overrides applied) and exits. |
-//! | `bolster create <PATH>...` | Creates a new dataset and uploads all files in the provided PATH(s). If any PATH is a directory, all files in the directory will be uploaded. Folder structure is preserved when uploading to cloud storage. Does not follow symlinks. |
+//! | `bolster upload <PATH>...` | Creates a new dataset and uploads all files in the provided PATH(s). If any PATH is a directory, all files in the directory will be uploaded. Folder structure is preserved when uploading to cloud storage. Does not follow symlinks. |
 //! | `bolster download <dataset_uuid> [prefix]...` | Downloads files from the given dataset. Files to download may be filtered by providing prefix(es). If multiple prefixes are provided, all files matching any prefix will be downloaded. |
 //! | `bolster ls [OPTIONS]` | List all datasets associated with your account. Datasets may be filtered or sorted using various options (e.g. by creation date). If a specific dataset is selected with the `--uuid` option, files in that dataset will be listed. |
 //!

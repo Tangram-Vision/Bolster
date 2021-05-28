@@ -75,10 +75,10 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
-        Some(("create", create_matches)) => {
+        Some(("upload", upload_matches)) => {
             let provider =
-                StorageProviderChoices::from_str(create_matches.value_of("provider").unwrap())?;
-            let mut file_paths: Vec<&Path> = create_matches
+                StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
+            let mut file_paths: Vec<&Path> = upload_matches
                 .values_of_os("PATH")
                 .unwrap()
                 .map(|os_str| Path::new(os_str))
@@ -127,7 +127,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .map(|path_str| path_str.to_owned())
                 .collect::<Vec<String>>();
 
-            let skip_prompt = create_matches.is_present("yes");
+            let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {
                 println!("Creating a dataset of {} file(s)", utf8_file_paths.len());
             } else {
@@ -316,8 +316,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .takes_value(true),
         )
         .subcommand(
-            App::new("create")
-                .about("Create + upload a new dataset")
+            App::new("upload")
+                .about("Upload files, creating a new remote dataset")
                 .arg(
                     Arg::new("PATH")
                         .about("Path(s) to folder(s) or file(s) to upload")
