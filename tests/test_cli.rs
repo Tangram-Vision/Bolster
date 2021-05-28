@@ -101,9 +101,8 @@ mod tests {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("upload")
+            .arg("create")
             .arg("--provider=digitalocean")
-            .arg("25a017c2-f371-4fd6-8973-62034bf6bed9")
             .arg("non-existent-file")
             .assert()
             .failure()
@@ -257,7 +256,7 @@ mod tests {
             when.method(GET)
                 .header("Authorization", "Bearer eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiODA3Y2ZmZTUtZGY2ZC00MzRhLTg2YTQtZDAwN2NkNzQ2YmQzIn0.761nFCTaAsLnU-VaUrLDMNKL6VffxEL9acYbYIaT7tQ")
                 .query_param("dataset_id", "eq.26fb2ac2-642a-4d7e-8233-b1835623b46b")
-                .query_param("or", "(url.ilike.*/test_full*)")
+                .query_param("or", "(filepath.ilike.test_full*)")
                 .path("/files");
             then.status(200)
                 .header("Content-Type", "application/json")
@@ -302,12 +301,11 @@ mod tests_internal {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("upload")
+            .arg("create")
             .arg("--provider=digitalocean")
-            .arg("25a017c2-f371-4fd6-8973-62034bf6bed9")
             .arg("non-existent-file")
             .assert()
             .failure()
-            .stderr(predicate::str::contains("Error: No such file or directory"));
+            .stderr(predicate::str::contains("is not a directory or a file"));
     }
 }

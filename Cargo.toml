@@ -33,10 +33,12 @@ env_logger = "0.8"
 futures = "0.3"
 futures-core = "0.3"
 human-panic = "1.0"
+indicatif = "0.16"
 lazy_static = "1.4"
 log = "0.4"
 md5 = "0.7"
 rand = "0.8"
+read-progress-stream = "1.0"
 rusoto_core = "0.46"
 rusoto_credential = "0.46"
 rusoto_s3 = "0.46"
@@ -46,7 +48,7 @@ shellexpand = "2.1"
 strum = "0.20"
 strum_macros = "0.20"
 tokio = { version = "1.1", features = ["fs"]}
-tokio-util = { version = "0.6", features = ["codec"]}
+tokio-util = { version = "0.6", features = ["codec", "io"]}
 toml = "0.5"
 url = { version = "2.2", features = ["serde"]}
 uuid = { version = "0.8", features = ["serde"]}

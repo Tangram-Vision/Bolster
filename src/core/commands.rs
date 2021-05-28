@@ -6,11 +6,13 @@
 use anyhow::Result;
 use futures::stream;
 use futures::stream::StreamExt;
+use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
+use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use serde_json::json;
 use std::convert::TryInto;
-use std::path::PathBuf;
+use std::sync::Arc;
 use uuid::Uuid;
 
 use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
@@ -19,10 +21,52 @@ use super::api::storage::StorageConfig;
 use super::models::{Dataset, UploadedFile};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
+pub fn get_default_progress_bar_style() -> ProgressStyle {
+    ProgressStyle::default_bar()
+    .template("{prefix} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} ({eta})")
+    .progress_chars("#>-")
+}
+
 pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
     // TODO: create Dataset model to pass in or just json?
     let dataset = datasets::datasets_post(config, json!({})).await?;
     Ok(dataset.dataset_id)
+}
+
+/// Manages annoyances with indicatif, namely that:
+/// - some thread of execution needs to join the MultiProgress to get progress
+/// bars to render
+/// - joining the MultiProgress immediately returns if there aren't ProgressBars
+/// attached, so we add a hidden/bogus one
+/// - the hidden/bogus ProgressBar needs to be cleaned up (by Drop, in this
+/// implementation) when we don't need to update progress bars anymore
+struct MultiProgressGuard {
+    inner: Arc<MultiProgress>,
+    hidden_spinner: ProgressBar,
+}
+
+impl MultiProgressGuard {
+    async fn new() -> Self {
+        let mp = Arc::new(MultiProgress::new());
+        let spinner = mp.add(ProgressBar::hidden());
+        let guard = MultiProgressGuard {
+            inner: mp,
+            hidden_spinner: spinner,
+        };
+        let mp2 = guard.inner.clone();
+        tokio::spawn(async move {
+            mp2.join().unwrap();
+        });
+        guard
+    }
+}
+
+impl Drop for MultiProgressGuard {
+    fn drop(&mut self) {
+        // Calling `spinner.finish` makes it appear for some reason, so we use
+        // `finish_and_clear` instead.
+        self.hidden_spinner.finish_and_clear();
+    }
 }
 
 pub async fn create_and_upload_dataset(
@@ -41,12 +85,20 @@ pub async fn create_and_upload_dataset(
     // TODO: Make this configurable?
     const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
 
-    // Uploads to storage AND registers to database
-    let mut futs = stream::iter(
-        file_paths
-            .into_iter()
-            .map(|path| upload_file(config.clone(), db_config, dataset_id, path, prefix)),
-    )
+    let guard = MultiProgressGuard::new().await;
+    let multi_progress = guard.inner.clone();
+
+    let mut futs = stream::iter(file_paths.into_iter().map(|path| {
+        // Uploads to storage AND registers to database
+        upload_file(
+            config.clone(),
+            db_config,
+            dataset_id,
+            path,
+            prefix,
+            &multi_progress,
+        )
+    }))
     .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
     while let Some(res) = futs.next().await {
         res?;
@@ -77,7 +129,7 @@ pub async fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
     url: &Url,
-    filesize: i64,
+    filesize: usize,
     version: String,
     metadata: serde_json::Value,
 ) -> Result<()> {
@@ -91,6 +143,7 @@ pub async fn upload_file(
     dataset_id: Uuid,
     path: String,
     prefix: &str,
+    multi_progress: &MultiProgress,
 ) -> Result<()> {
     // This threshold determines when we switch from one-shot upload (using
     // PutObject API) to a multipart upload (using CreateMultipartUpload,
@@ -100,14 +153,14 @@ pub async fn upload_file(
     // The threshold is set a bit arbitrarily -- it is above 64MB that the
     // multipart upload starts being faster than one-shot uploads. Below 64MB,
     // the extra overhead of extra API calls makes multipart uploads slower.
-    const MULTIPART_FILESIZE_THRESHOLD: i64 = 64 * 1024 * 1024;
+    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * 1024 * 1024;
 
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
 
     debug!("Got path {:?}", path);
-    let filesize: i64 = tokio::fs::metadata(path.clone())
+    let filesize: usize = tokio::fs::metadata(path.clone())
         .await?
         .len()
         .try_into()
@@ -120,7 +173,8 @@ pub async fn upload_file(
             "Filesize {} < threshold {} so doing oneshot",
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
-        let (url, version) = storage::upload_file_oneshot(config, path, filesize, key).await?;
+        let (url, version) =
+            storage::upload_file_oneshot(config, path, filesize, key, &multi_progress).await?;
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     } else {
@@ -129,7 +183,8 @@ pub async fn upload_file(
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
         let (url, version) =
-            storage::upload_file_multipart(config, path, filesize as usize, key).await?;
+            storage::upload_file_multipart(config, path, filesize as usize, key, &multi_progress)
+                .await?;
         // Register uploaded file to database
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     }
@@ -150,45 +205,71 @@ pub async fn list_files(
     datasets::files_get(config, dataset_id, prefixes).await
 }
 
-pub async fn download_files(config: config::Config, file_paths: Vec<UploadedFile>) -> Result<()> {
+pub async fn download_files(
+    config: config::Config,
+    uploaded_files: Vec<UploadedFile>,
+) -> Result<()> {
     // TODO: Make this configurable?
     const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
 
-    if file_paths.is_empty() {
+    if uploaded_files.is_empty() {
         Ok(())
     } else {
+        let guard = MultiProgressGuard::new().await;
+        let multi_progress = guard.inner.clone();
+
         // Based on url from database, find which StorageProvider's config to use
-        let provider = StorageProviderChoices::from_url(&file_paths[0].url)?;
+        let provider = StorageProviderChoices::from_url(&uploaded_files[0].url)?;
         let storage_config = StorageConfig::new(config, provider)?;
 
         let mut futs = stream::iter(
-            file_paths
+            uploaded_files
                 .iter()
-                .map(|file| download_file_and_provide_filepath(storage_config.clone(), file)),
+                .zip(std::iter::repeat_with(|| storage_config.clone()))
+                .map(|(uploaded_file, local_storage_config)| {
+                    download_file(local_storage_config, &uploaded_file, &multi_progress)
+                }),
         )
         .buffer_unordered(MAX_FILES_DOWNLOADING_CONCURRENTLY);
         while let Some(res) = futs.next().await {
-            let (bytestream, filepath) = res?;
-            let mut async_data = bytestream.into_async_read();
-            if let Some(dir) = filepath.parent() {
-                tokio::fs::create_dir_all(dir).await?;
-            }
-            let mut file = tokio::fs::File::create(filepath).await?;
-            tokio::io::copy(&mut async_data, &mut file).await?;
+            res?;
         }
 
         Ok(())
     }
 }
 
-// Helper function to provide filepath along with downloaded file data
-async fn download_file_and_provide_filepath(
-    config: storage::StorageConfig,
-    file: &UploadedFile,
-) -> Result<(rusoto_core::ByteStream, PathBuf)> {
-    let async_data = storage::download_file(config.clone(), &file.url).await?;
-    let filepath = file.filepath_from_url()?;
-    Ok((async_data, filepath))
+pub async fn download_file(
+    storage_config: StorageConfig,
+    uploaded_file: &UploadedFile,
+    multi_progress: &MultiProgress,
+) -> Result<()> {
+    debug!("Downloading file: {}", uploaded_file.url);
+    let filepath = uploaded_file.filepath_from_url()?;
+    if let Some(dir) = filepath.parent() {
+        tokio::fs::create_dir_all(dir).await?;
+    }
+
+    let progress_bar = multi_progress.add(ProgressBar::new(uploaded_file.filesize));
+    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_prefix(filepath.to_string_lossy().into_owned());
+    progress_bar.set_position(0);
+    let pgbar = progress_bar.clone();
+    // Let progress bar follow along with # bytes read
+    let progress = Box::new(move |_bytes_read: u64, total_bytes_read: u64| {
+        pgbar.set_position(total_bytes_read);
+    });
+
+    let async_data = storage::download_file(storage_config, &uploaded_file.url).await?;
+    let mut file = tokio::fs::File::create(filepath.clone()).await?;
+    let read_wrapper = ReadProgressStream::new(async_data, progress);
+
+    let mut wrapper = tokio_util::io::StreamReader::new(read_wrapper);
+    tokio::io::copy(&mut wrapper, &mut file).await?;
+    debug!("Downloaded file copied to destination: {:?}", filepath);
+    progress_bar.finish();
+
+    Ok(())
 }
 
 /// Show the configuration file
@@ -226,7 +307,8 @@ mod tests {
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = "nonexistent-file".to_owned();
         let prefix = "";
-        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix)
+        let mp = MultiProgress::new();
+        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix, &mp)
             .await
             .expect_err("Loading nonexistent file should fail");
         assert!(
