@@ -114,39 +114,6 @@ impl Default for DatasetGetRequest {
     }
 }
 
-/*
-pub fn datasets_patch(
-    configuration: &DatabaseApiConfig,
-    uuid: Uuid,
-    new_url: &Url,
-) -> Result<Dataset> {
-    debug!("building patch request for: {}", uuid);
-    let client = &configuration.client;
-
-    let mut api_url = configuration.base_url.clone();
-    api_url.set_path("datasets");
-    let mut req_builder = client.patch(api_url.as_str());
-
-    req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
-
-    let req_body = json!({ "url": new_url });
-    req_builder = req_builder.json(&req_body);
-
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
-
-    debug!("status: {}", response.status());
-    let content = response.text()?;
-    debug!("response content: {}", content);
-
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
-    datasets
-        .pop()
-        .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
-}
-*/
-
 /// Get a list of datasets and their files.
 ///
 /// # Errors

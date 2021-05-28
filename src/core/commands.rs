@@ -145,15 +145,6 @@ pub async fn list_datasets(
     Ok(datasets)
 }
 
-/*
-pub async fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Result<()> {
-    // TODO: change to update files (not datasets) when files are their own db table
-
-    datasets::datasets_patch(config, uuid, url)?;
-    Ok(())
-}
-*/
-
 /// Registers uploaded file (critically, its url) in the datasets database.
 ///
 /// Thin wrapper around [datasets::files_post] -- see its documentation for
