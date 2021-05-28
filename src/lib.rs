@@ -52,16 +52,23 @@
 //! ```shell
 //! bolster config
 //! ```
-//! ### `bolster upload <path>...`
+//! ### `bolster upload <device_id> <path>...`
 //!
-//! Creates a new dataset and uploads all files in the provided path(s). If any
-//! path is a directory, all files in the directory will be uploaded. Folder
-//! structure is preserved when uploading to cloud storage. Does not follow
-//! symlinks.
+//! Creates a new dataset associated with the device ID and uploads all files in
+//! the provided path(s). If any path is a directory, all files in the directory
+//! will be uploaded. Folder structure is preserved when uploading to cloud
+//! storage. Does not follow symlinks.
 //!
 //! Uploading files creates a new dataset and outputs the created dataset's
 //! UUID, which can be used to download or query the dataset or the files it
 //! contains in the future.
+//!
+//! The `<device_id>` provided when uploading a dataset should match however you
+//! identify your devices/robots/installations, whether that be by an integer
+//! (e.g. "unit 1") or a serial (e.g. "A12") or a build date (e.g.
+//! "12-MAY-2021") or a location (e.g. "field3" or "southwest-corner") or
+//! anything else. The dataset will be associated with the given device_id, to
+//! allow filtering datasets (and processing results) by device.
 //!
 //! Only files up to 4.88 TB may be uploaded.
 //!

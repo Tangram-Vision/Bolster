@@ -78,6 +78,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
         Some(("upload", upload_matches)) => {
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
+            let device_id: String = upload_matches.value_of_t_or_exit::<String>("device_id");
             let mut file_paths: Vec<&Path> = upload_matches
                 .values_of_os("path")
                 .unwrap()
@@ -151,6 +152,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             commands::create_and_upload_dataset(
                 storage_config,
                 &db_config,
+                device_id,
                 &prefix,
                 utf8_file_paths,
             )
@@ -183,6 +185,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
+            let device_id: Option<String> = handle_optional_arg(ls_matches, "device_id");
             let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
@@ -190,6 +193,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             let get_params = DatasetGetRequest {
                 dataset_id,
+                device_id,
                 before_date,
                 after_date,
                 order,
@@ -227,14 +231,15 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 // ... otherwise show just datasets
                 else {
                     println!(
-                        "{:<40} {:<32} {:<8} {:<12}",
-                        "UUID", "Created Datetime", "# Files", "Filesize",
+                        "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
+                        "UUID", "Device ID", "Created Datetime", "# Files", "Filesize",
                     );
                     for d in datasets {
                         println!(
-                            "{:<40} {:<32} {:<8} {:<12}",
+                            "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
                             d.dataset_id.to_string(),
-                            d.created_date.to_string(),
+                            d.device_id,
+                            d.created_date.format("%Y-%m-%d %H:%M:%S UTC"),
                             d.files.len(),
                             Byte::from_bytes(
                                 d.files.iter().fold(0, |acc, x| acc + x.filesize as u128)
@@ -315,6 +320,15 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             App::new("upload")
                 .about("Upload files, creating a new remote dataset")
                 .arg(
+                    Arg::new("device_id")
+                        .about("String that identifies the \
+                                device/robot/installation that produced the \
+                                dataset. Useful for filtering datasets and \
+                                results.")
+                        .required(true)
+                        .takes_value(true)
+                )
+                .arg(
                     Arg::new("path")
                         .about("Path(s) to folder(s) or file(s) to upload")
                         .required(true)
@@ -371,6 +385,12 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .short('u')
                         .long("uuid")
                         .value_name("UUID")
+                        .takes_value(true),
+                    Arg::new("device_id")
+                        .about("Show datasets from specified device")
+                        .short('d')
+                        .long("device-id")
+                        .value_name("DEVICE_ID")
                         .takes_value(true),
                     Arg::new("order")
                         .about("Sort results by field")
