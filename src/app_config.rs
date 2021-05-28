@@ -121,15 +121,17 @@ impl Database {
     /// # Examples
     ///
     /// ```
+    /// # use std::str::FromStr;
+    /// # use bolster::app_config::Database;
     /// let db = Database {
-    ///     url: Url::from_str("http://example.com").unwrap(),
+    ///     url: reqwest::Url::from_str("http://example.com").unwrap(),
     ///     jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lk\
     ///                        IjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5Z\
     ///                        jQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3Nj\
     ///                        Q4fQ.NE3gOa2dg7xh1hRpr0haDWLLOxqmK8BBvmD-rQfYpuQ"),
     /// };
     /// assert_eq!(
-    ///     Uuid::parse_str("f60a843a-25ac-4c54-a169-5e9097b69f43").unwrap(),
+    ///     uuid::Uuid::parse_str("f60a843a-25ac-4c54-a169-5e9097b69f43").unwrap(),
     ///     db.user_id_from_jwt().unwrap()
     /// );
     /// ```

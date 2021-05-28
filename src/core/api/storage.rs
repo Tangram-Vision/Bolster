@@ -208,17 +208,26 @@ where
 ///
 /// # Examples
 ///
-/// ```
-/// let mut stream = read_file_chunks(tokio_file, chunk_size, filesize as usize);
+/// ```no_run
+/// # use futures::stream::StreamExt;
+/// # use log::debug;
+/// # use bolster::core::api::storage::read_file_chunks;
+/// # async fn dox() -> std::io::Result<()> {
+/// # let chunk_size: usize = 1;
+/// # let filesize: usize = 1;
+/// let tokio_file = tokio::fs::File::open("foo.txt").await?;
+/// let mut stream = read_file_chunks(tokio_file, chunk_size, filesize);
 /// while let Some(maybe_chunk) = stream.next().await {
 ///     if let Ok(chunk) = maybe_chunk {
-///         debug!("Got chunk {} from file", chunk.part_number);
+///         debug!("Got chunk from file!");
 ///     }
 ///     else {
 ///         debug!("Error reading chunk from file!");
-///         return maybe_chunk.unwrap_err();
+///         maybe_chunk?;
 ///     }
 /// }
+/// # Ok(())
+/// # }
 /// ```
 ///
 /// # Errors
