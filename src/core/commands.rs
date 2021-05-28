@@ -27,6 +27,22 @@ use super::{
 };
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
+/// Number of files allowed to upload at the same time.
+pub const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
+
+/// Number of files allowed to download at the same time.
+pub const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
+
+/// Files with sizes under this threshold use one-shot upload, all other files
+/// use multipart upload.
+///
+/// The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
+/// The threshold is set a bit arbitrarily -- it is above 64MB that the
+/// multipart upload starts being faster than one-shot uploads in local testing.
+/// Below 64MB, the extra overhead of extra API calls makes multipart uploads
+/// slower.
+pub const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * (MEBIBYTE as usize);
+
 /// Provides the default progress bar style
 ///
 /// For a list of template fields (e.g. elapsed time, bytes remaining), see
@@ -108,9 +124,6 @@ pub async fn create_and_upload_dataset(
     println!("Created new dataset with UUID: {}", dataset_id);
     debug!("paths: {:?}", file_paths);
 
-    // TODO: Make this configurable?
-    const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
-
     let guard = MultiProgressGuard::new().await;
     let multi_progress = guard.inner.clone();
 
@@ -187,16 +200,6 @@ pub async fn upload_file(
     prefix: &str,
     multi_progress: &MultiProgress,
 ) -> Result<()> {
-    // This threshold determines when we switch from one-shot upload (using
-    // PutObject API) to a multipart upload (using CreateMultipartUpload,
-    // UploadPart, and CompleteMultipartUpload APIs).
-    //
-    // The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
-    // The threshold is set a bit arbitrarily -- it is above 64MB that the
-    // multipart upload starts being faster than one-shot uploads. Below 64MB,
-    // the extra overhead of extra API calls makes multipart uploads slower.
-    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * (MEBIBYTE as usize);
-
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
@@ -267,9 +270,6 @@ pub async fn download_files(
     config: config::Config,
     uploaded_files: Vec<UploadedFile>,
 ) -> Result<()> {
-    // TODO: Make this configurable?
-    const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
-
     if uploaded_files.is_empty() {
         Ok(())
     } else {

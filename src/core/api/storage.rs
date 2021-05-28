@@ -33,6 +33,13 @@ use crate::{
     core::commands,
 };
 
+/// Controls how many requests can be in-flight at a time (for one multipart
+/// file upload)
+///
+/// This controls how much of the file is read and held in RAM concurrently
+/// (chunk size also plays a part).
+pub const CONCURRENT_REQUEST_LIMIT: usize = 10;
+
 /// Configuration for interacting with S3-compatible cloud storage.
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
@@ -579,13 +586,6 @@ pub async fn upload_file_multipart(
     // ======
     // Upload parts
     // ======
-
-    // CONCURRENT_REQUEST_LIMIT controls how many requests can be in-flight at a
-    // time (for a single file upload), which controls how much of the file is
-    // read and held in RAM concurrently (chunk size also plays a part).
-    //
-    // TODO: Make concurrent_request_limit (or RAM usage) configurable.
-    const CONCURRENT_REQUEST_LIMIT: usize = 10;
     let chunk_size = derive_chunk_size(filesize)?;
     let tokio_file = tokio::fs::File::open(&path).await?;
 
