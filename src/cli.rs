@@ -360,12 +360,12 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                     // Related to
                     // - https://gitlab.com/tangram-vision/bolster/-/issues/1
                     // - https://gitlab.com/tangram-vision/bolster/-/issues/4
-                    Arg::new("metadata")
-                        .about("NOT IMPLEMENTED: Show dataset matching metadata")
-                        .short('m')
-                        .long("metadata")
-                        .value_name("???")
-                        .takes_value(true),
+                    // Arg::new("metadata")
+                    //     .about("NOT IMPLEMENTED: Show dataset matching metadata")
+                    //     .short('m')
+                    //     .long("metadata")
+                    //     .value_name("???")
+                    //     .takes_value(true),
                     Arg::new("dataset_uuid")
                         .about("Show files in dataset matching uuid")
                         .short('u')
