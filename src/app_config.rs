@@ -120,7 +120,10 @@ impl Database {
     ///
     /// # Examples
     ///
-    /// ```
+    /// Example is ignored because no bolster modules are public. Update this
+    /// doctest if modules are changed to be public.
+    ///
+    /// ```ignore
     /// # use std::str::FromStr;
     /// # use bolster::app_config::Database;
     /// let db = Database {

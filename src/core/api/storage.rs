@@ -214,7 +214,10 @@ where
 ///
 /// # Examples
 ///
-/// ```no_run
+/// Example is ignored because no bolster modules are public. Update this
+/// doctest if modules are changed to be public.
+///
+/// ```ignore
 /// # use futures::stream::StreamExt;
 /// # use log::debug;
 /// # use bolster::core::api::storage::read_file_chunks;
