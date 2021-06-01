@@ -6,6 +6,6 @@
 //! Backend data representations and interactions with database and storage
 //! providers.
 
-pub mod api;
-pub mod commands;
-pub mod models;
+pub(crate) mod api;
+pub(crate) mod commands;
+pub(crate) mod models;

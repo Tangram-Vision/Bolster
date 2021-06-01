@@ -5,5 +5,5 @@
 
 //! Datasets and storage API actions and helpers.
 
-pub mod datasets;
-pub mod storage;
+pub(crate) mod datasets;
+pub(crate) mod storage;

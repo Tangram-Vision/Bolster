@@ -92,12 +92,13 @@
 #[cfg(not(debug_assertions))]
 use human_panic::setup_panic;
 
-pub mod app_config;
-pub mod cli;
-pub mod core;
+mod app_config;
+mod cli;
+mod core;
 
 use anyhow::Result;
 
+#[doc(hidden)]
 /// Main entrypoint
 pub fn run() -> Result<()> {
     // Human Panic. Only enabled when *not* debugging.
