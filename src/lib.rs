@@ -52,10 +52,10 @@
 //! ```shell
 //! bolster config
 //! ```
-//! ### `bolster upload <PATH>...`
+//! ### `bolster upload <path>...`
 //!
-//! Creates a new dataset and uploads all files in the provided PATH(s). If any
-//! PATH is a directory, all files in the directory will be uploaded. Folder
+//! Creates a new dataset and uploads all files in the provided path(s). If any
+//! path is a directory, all files in the directory will be uploaded. Folder
 //! structure is preserved when uploading to cloud storage. Does not follow
 //! symlinks.
 //!

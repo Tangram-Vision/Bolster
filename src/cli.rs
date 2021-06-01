@@ -79,7 +79,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
             let mut file_paths: Vec<&Path> = upload_matches
-                .values_of_os("PATH")
+                .values_of_os("path")
                 .unwrap()
                 .map(|os_str| Path::new(os_str))
                 .collect::<Vec<&Path>>();
@@ -307,7 +307,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             Arg::new("config")
                 .short('c')
                 .long("config")
-                .value_name("FILE")
+                .value_name("file")
                 .about("Set a custom config file")
                 .takes_value(true),
         )
@@ -315,7 +315,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             App::new("upload")
                 .about("Upload files, creating a new remote dataset")
                 .arg(
-                    Arg::new("PATH")
+                    Arg::new("path")
                         .about("Path(s) to folder(s) or file(s) to upload")
                         .required(true)
                         .takes_value(true)
