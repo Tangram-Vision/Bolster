@@ -67,8 +67,8 @@
 //! to cloud storage.
 //!
 //! If you would like to report a security bug or issue, email
-//! security@tangramvision.com (TODO: should we make this email list?). Our team
-//! will acknowledge your email within 72 hours, and will send a more detailed
+//! [support@tangramvision.com](mailto:support@tangramvision.com). Our team will
+//! acknowledge your email within 72 hours, and will send a more detailed
 //! response within 72 hours indicating the next steps in handling your report.
 //! After the initial reply to your report, we will endeavor to keep you
 //! informed of the progress towards a fix and full announcement, and may ask
