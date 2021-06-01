@@ -96,7 +96,7 @@ impl UploadedFile {
                 }
             } else {
                 // We got to the end and never found the dataset id?
-                bail!("File url ({}) doesn't contain dataset-id. Please contact support@tangramvision.com", self.url);
+                bail!("File url ({}) doesn't contain dataset-id.", self.url);
             }
         }
         Ok(segments.collect::<PathBuf>())
@@ -196,11 +196,9 @@ mod tests {
             .to_string();
         assert_eq!(
             true,
-            predicate::str::is_match(
-                "File url .* doesn't contain dataset-id. Please contact support@tangramvision.com"
-            )
-            .unwrap()
-            .eval(&e)
+            predicate::str::is_match("File url .* doesn't contain dataset-id.")
+                .unwrap()
+                .eval(&e)
         );
     }
 }
