@@ -110,14 +110,16 @@ image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls.png)
 # bolster upload
 ###############
 
-# Uploads myfile1 as a new dataset.
-bolster upload myfile1
+# Uploads myfile1 as a new dataset for the "robot-1" device.
+bolster upload robot-1 myfile1
 
-# Uploads myfile1, myfile2, and myfile3 as a new dataset for robot-1
-bolster upload robot-1 myfile1 myfile2 myfile3
+# Uploads myfile1, myfile2, and myfile3 as a new dataset for the "drone-A12"
+# device.
+bolster upload drone-A12 myfile1 myfile2 myfile3
 
-# Uploads all files in myfolder1 and myfile4 as a new dataset.
-bolster upload myfolder1 myfolder2/myfile4
+# Uploads all files in myfolder1 and myfile4 as a new dataset for "johnny-5"
+# device.
+bolster upload johnny-5 myfolder1 myfolder2/myfile4
 
 ###############
 # bolster download
