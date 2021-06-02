@@ -89,7 +89,9 @@ pages:
   # https://docs.gitlab.com/ee/ci/yaml/#needs
   needs: []
   script:
-    - cargo doc --no-deps --document-private-items
+    # Don't include --document-private-items because we only want to show
+    # crate-level docs from lib.rs for end-users.
+    - cargo doc --no-deps
     - mkdir public
     - cp -r target/doc/* public
     - cp -r assets public/
