@@ -326,11 +326,51 @@ pub async fn files_post(
         .ok_or_else(|| anyhow!("Database returned no info for updated File!"))
 }
 
+/// Notify backend that uploading a dataset is complete.
+///
+/// This API call may trigger backend processing or notifications.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable).
+pub async fn datasets_notify_upload_complete(
+    configuration: &DatabaseApiConfig,
+    dataset_id: Uuid,
+) -> Result<()> {
+    debug!(
+        "Building datasets_notify_upload_complete post request for: {}",
+        dataset_id
+    );
+    let client = &configuration.client;
+
+    let mut api_url = configuration.base_url.clone();
+    api_url.set_path("rpc/dataset_upload_complete");
+    let mut req_builder = client.post(api_url.as_str());
+
+    let req_body = json!({
+        "dataset_id": dataset_id,
+    });
+    req_builder = req_builder.json(&req_body);
+
+    let response = req_builder.send().await?;
+    response.error_for_status_ref()?;
+
+    debug!("status: {}", response.status());
+    let content = response.text().await?;
+    debug!("content: {}", content);
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::str::FromStr;
 
-    use httpmock::{Method::GET, MockServer};
+    use httpmock::{
+        Method::{GET, POST},
+        MockServer,
+    };
 
     use super::*;
 
@@ -558,5 +598,35 @@ mod tests {
         mock.assert();
         assert!(downcast.is_timeout());
         assert!(result.to_string().contains("operation timed out"));
+    }
+
+    #[tokio::test]
+    async fn test_datasets_notify_upload_complete() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(POST)
+                .header("Authorization", "Bearer TEST-TOKEN")
+                .body(r#"{"dataset_id":"afd56ecf-9d87-4053-8c80-0d924f06da52"}"#)
+                .path("/rpc/dataset_upload_complete");
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!([{
+                    "status": "ok",
+                }]));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let dataset_id = Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap();
+
+        datasets_notify_upload_complete(&config, dataset_id)
+            .await
+            .unwrap();
+
+        mock.assert();
     }
 }

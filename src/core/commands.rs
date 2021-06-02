@@ -141,6 +141,11 @@ pub async fn create_and_upload_dataset(
         res?;
     }
 
+    // After all uploads are complete, notify the backend so it can begin
+    // processing, send notifications, etc.
+    debug!("Upload(s) complete, notifying backend of completion");
+    datasets::datasets_notify_upload_complete(db_config, dataset_id).await?;
+
     Ok(())
 }
 
