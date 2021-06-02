@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Upload and download files to/from cloud storage.
 
 use std::cmp::{max, min};

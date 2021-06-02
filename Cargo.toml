@@ -11,6 +11,7 @@ CLI tool for managing sensor datasets, including upload/download and search/sort
 
 For more detailed documentation, visit: https://tangram-vision.gitlab.io/bolster/
 """
+license = "MIT"
 
 [dependencies]
 anyhow = "1.0"
