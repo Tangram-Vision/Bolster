@@ -124,7 +124,7 @@
 //! # Downloads all files in dataset 1415fe36-851f-4c62-a616-4f5e343ba5fc to
 //! # your current working directory.
 //! bolster download 1415fe36-851f-4c62-a616-4f5e343ba5fc
-//! 
+//!
 //! # Downloads files myfile1 and myfile2 from the dataset to your current
 //! # working directory.
 //! bolster download 1415fe36-851f-4c62-a616-4f5e343ba5fc myfile1 myfile2
@@ -137,6 +137,7 @@
 //! ###############
 //! # bolster ls
 //! ###############
+//!
 //! # List 100 datasets instead of showing the default limit 20
 //! bolster ls --limit=100
 //!

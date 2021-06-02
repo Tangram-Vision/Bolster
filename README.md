@@ -139,6 +139,7 @@ bolster download 1415fe36-851f-4c62-a616-4f5e343ba5fc myfolder1
 ###############
 # bolster ls
 ###############
+
 # List 100 datasets instead of showing the default limit 20
 bolster ls --limit=100
 
