@@ -23,7 +23,7 @@ pub struct DatabaseApiConfig {
 }
 
 impl DatabaseApiConfig {
-    /// Configure HTTP client with auth, user-agent, and headers.
+    /// Configure HTTP client with endpoint, auth, and timeout.
     pub fn new_with_params(
         base_url: Url,
         bearer_access_token: String,
@@ -49,6 +49,7 @@ impl DatabaseApiConfig {
         })
     }
 
+    /// Configure HTTP client with endpoint, auth, and default 30-second timeout;
     pub fn new(base_url: Url, bearer_access_token: String) -> Result<Self> {
         let timeout = 30;
         Self::new_with_params(base_url, bearer_access_token, timeout)

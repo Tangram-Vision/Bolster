@@ -36,8 +36,13 @@ pub const CONCURRENT_REQUEST_LIMIT: usize = 10;
 /// Configuration for interacting with S3-compatible cloud storage.
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
+    /// Access and secret keys for storage provider
     credentials: StaticProvider,
+    /// Bucket name
     bucket: String,
+    /// Region/endpoint (use
+    /// [Region::Custom](https://docs.rs/rusoto_core/0.46.0/rusoto_core/enum.Region.html#variant.Custom)
+    /// for non-S3 providers)
     region: Region,
 }
 
