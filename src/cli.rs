@@ -183,8 +183,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             // TODO: Implement metadata CLI input
             // Related to
-            // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-            // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let device_id: Option<String> = handle_optional_arg(ls_matches, "device_id");
@@ -375,8 +375,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .takes_value(true),
                     // TODO: Implement metadata CLI input
                     // Related to
-                    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-                    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
                     // Arg::new("metadata")
                     //     .about("NOT IMPLEMENTED: Show dataset matching metadata")
                     //     .short('m')

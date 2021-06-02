@@ -102,8 +102,8 @@ pub struct DatasetGetRequest {
     pub offset: Option<usize>,
     // TODO: Implement metadata CLI input
     // Related to
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 }
 
 impl Default for DatasetGetRequest {
@@ -153,8 +153,8 @@ pub async fn datasets_get(
     }
     // TODO: Implement metadata CLI input
     // Related to
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 
     if let Some(order) = &params.order {
         req_builder = req_builder.query(&[("order", order.to_database_field())]);
