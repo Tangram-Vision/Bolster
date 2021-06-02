@@ -207,14 +207,14 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
                 }, {
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -255,7 +255,7 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},

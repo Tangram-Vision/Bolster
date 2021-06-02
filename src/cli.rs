@@ -26,6 +26,7 @@ use crate::{
         api::{
             datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering},
             storage,
+            storage::StorageConfig,
         },
         commands,
     },
@@ -78,6 +79,9 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
         Some(("upload", upload_matches)) => {
             let provider =
                 StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
+            let storage_config = storage::StorageConfig::new(config, provider)?;
+            let prefix = db.user_id_from_jwt()?.to_string();
+
             let device_id: String = upload_matches.value_of_t_or_exit::<String>("device_id");
             let mut file_paths: Vec<&Path> = upload_matches
                 .values_of_os("path")
@@ -147,8 +151,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 }
             }
 
-            let storage_config = storage::StorageConfig::new(config, provider)?;
-            let prefix = db.user_id_from_jwt()?.to_string();
             commands::create_and_upload_dataset(
                 storage_config,
                 &db_config,
@@ -258,6 +260,10 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 });
             let uploaded_files = commands::list_files(&db_config, dataset_id, prefixes).await?;
 
+            // Based on url from database, find which StorageProvider's config to use
+            let provider = StorageProviderChoices::from_url(&uploaded_files[0].url)?;
+            let storage_config = StorageConfig::new(config, provider)?;
+
             let total_filesize = uploaded_files.iter().fold(0, |acc, f| acc + f.filesize);
             let number_of_files = uploaded_files.len();
 
@@ -284,7 +290,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     }
                 }
             }
-            commands::download_files(config, uploaded_files).await?;
+            commands::download_files(storage_config, uploaded_files).await?;
         }
         _ => {
             // Arguments are required by default (in Clap).
