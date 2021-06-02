@@ -7,7 +7,7 @@
 
 use std::cmp::{max, min};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use byte_unit::{GIBIBYTE, MEBIBYTE};
 use futures::stream::{
     futures_unordered::FuturesUnordered, try_unfold, Stream, StreamExt, TryStreamExt,
@@ -26,10 +26,8 @@ use rusoto_s3::{
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
-#[cfg(feature = "tangram-internal")]
-use crate::app_config::DigitalOceanSpacesConfig;
 use crate::{
-    app_config::{AwsS3Config, StorageProviderChoices},
+    app_config::{AwsS3Config, DigitalOceanSpacesConfig, StorageProviderChoices},
     core::commands,
 };
 
@@ -52,10 +50,9 @@ impl StorageConfig {
     /// Initialize storage config from bolster config and a selected provider.
     pub fn new(config: config::Config, provider: StorageProviderChoices) -> Result<StorageConfig> {
         match provider {
-            #[cfg(feature = "tangram-internal")]
             StorageProviderChoices::DigitalOcean => {
                 let do_config = config
-                    .try_into::<DigitalOceanSpacesConfig>()?
+                    .try_into::<DigitalOceanSpacesConfig>().with_context(|| "Config file must contain a [digitalocean_spaces] section to upload to DigitalOcean Spaces.")?
                     .digitalocean_spaces;
                 Ok(StorageConfig {
                     credentials: StaticProvider::new_minimal(
@@ -70,7 +67,12 @@ impl StorageConfig {
                 })
             }
             StorageProviderChoices::Aws => {
-                let aws_config = config.try_into::<AwsS3Config>()?.aws_s3;
+                let aws_config = config
+                    .try_into::<AwsS3Config>()
+                    .with_context(|| {
+                        "Config file must contain a [aws_s3] section to upload to AWS S3."
+                    })?
+                    .aws_s3;
                 Ok(StorageConfig {
                     credentials: StaticProvider::new_minimal(
                         aws_config.access_key,

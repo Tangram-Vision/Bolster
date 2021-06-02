@@ -20,7 +20,6 @@ use uuid::Uuid;
 #[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, PartialEq)]
 pub enum StorageProviderChoices {
     /// DigitalOcean Spaces
-    #[cfg(feature = "tangram-internal")]
     #[strum(serialize = "digitalocean")]
     DigitalOcean,
     /// AWS S3
@@ -32,7 +31,6 @@ impl StorageProviderChoices {
     /// The domain name corresponding to the storage provider.
     pub fn url_pattern(&self) -> &'static str {
         match *self {
-            #[cfg(feature = "tangram-internal")]
             StorageProviderChoices::DigitalOcean => "digitaloceanspaces.com",
             StorageProviderChoices::Aws => "amazonaws.com",
         }
@@ -47,7 +45,6 @@ impl StorageProviderChoices {
                 Ok(StorageProviderChoices::Aws)
             }
 
-            #[cfg(feature = "tangram-internal")]
             x if x.contains(StorageProviderChoices::DigitalOcean.url_pattern()) => {
                 Ok(StorageProviderChoices::DigitalOcean)
             }
@@ -61,11 +58,6 @@ impl StorageProviderChoices {
 }
 
 impl Default for StorageProviderChoices {
-    #[cfg(feature = "tangram-internal")]
-    fn default() -> Self {
-        StorageProviderChoices::DigitalOcean
-    }
-    #[cfg(not(feature = "tangram-internal"))]
     fn default() -> Self {
         StorageProviderChoices::Aws
     }
@@ -75,7 +67,6 @@ impl Default for StorageProviderChoices {
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompleteAppConfig {
     pub database: Database,
-    #[cfg(feature = "tangram-internal")]
     pub digitalocean_spaces: Option<StorageApiKeys>,
     pub aws_s3: Option<StorageApiKeys>,
 }
@@ -96,7 +87,6 @@ pub struct Database {
 
 /// Container for configuration values for connecting to DigitalOcean Spaces
 /// cloud storage.
-#[cfg(feature = "tangram-internal")]
 #[derive(Debug, Deserialize)]
 pub struct DigitalOceanSpacesConfig {
     pub digitalocean_spaces: StorageApiKeys,
@@ -194,21 +184,6 @@ mod tests {
             error
                 .to_string()
                 .contains("Storage provider url doesn't contain a domain:"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[test]
-    fn test_digitalocean_provider_unavailable() {
-        let error = StorageProviderChoices::from_url(
-            &Url::from_str("https://digitaloceanspaces.com/bucket/key").unwrap(),
-        )
-        .expect_err("Url shouldn't be recognized as a storage provider url");
-        assert!(
-            error
-                .to_string()
-                .contains("Trying to download from unknown storage provider:"),
             "{}",
             error.to_string()
         );
@@ -317,14 +292,6 @@ mod tests {
                 .eval(&db.user_id_from_jwt().unwrap_err().to_string())
         );
     }
-}
-
-#[cfg(all(test, feature = "tangram-internal"))]
-mod tests_internal {
-    use std::str::FromStr;
-
-    use super::*;
-
     #[test]
     fn test_digitalocean_provider_available() {
         let val = StorageProviderChoices::from_url(

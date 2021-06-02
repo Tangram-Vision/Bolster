@@ -97,23 +97,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_digitalocean_provider_unavailable() {
-        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-
-        cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
-            .arg("upload")
-            .arg("robot-01")
-            .arg("--provider=digitalocean")
-            .arg("non-existent-file")
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "'digitalocean' isn't a valid value for '--provider <PROVIDER>'",
-            ));
-    }
-
-    #[test]
     fn test_cli_no_files_in_dataset() {
         // To debug what rusoto and httpmock are doing, enable logger and run
         // tests with debug or trace level.
@@ -224,14 +207,14 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
                 }, {
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -272,7 +255,7 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://bucket.example.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -294,12 +277,6 @@ mod tests {
             ));
         mock.assert();
     }
-}
-
-#[cfg(all(test, feature = "tangram-internal"))]
-mod tests_internal {
-    use assert_cmd::Command;
-    use predicates::prelude::*;
 
     #[test]
     fn test_cli_digitalocean_provider_available() {

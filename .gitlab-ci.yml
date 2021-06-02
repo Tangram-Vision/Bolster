@@ -52,10 +52,6 @@ test:
   script:
     - rustc --version
     - cargo --version
-    # Tests are contained in a tests-internal module if they require the
-    # tangram-internal feature, otherwise they're in a tests-public module.
-    # Make sure to run both sets of tests!
-    - cargo test --verbose --features=tangram-internal tests_internal
     - cargo test --verbose
 
 lint:

@@ -25,7 +25,7 @@ use super::{
     },
     models::{Dataset, UploadedFile},
 };
-use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
+use crate::app_config::CompleteAppConfig;
 
 /// Number of files allowed to upload at the same time.
 pub const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
@@ -265,7 +265,7 @@ pub async fn list_files(
 ///
 /// Wraps [download_file] -- see its documentation for other possible errors.
 pub async fn download_files(
-    config: config::Config,
+    storage_config: StorageConfig,
     uploaded_files: Vec<UploadedFile>,
 ) -> Result<()> {
     if uploaded_files.is_empty() {
@@ -273,10 +273,6 @@ pub async fn download_files(
     } else {
         let guard = MultiProgressGuard::new().await;
         let multi_progress = guard.inner.clone();
-
-        // Based on url from database, find which StorageProvider's config to use
-        let provider = StorageProviderChoices::from_url(&uploaded_files[0].url)?;
-        let storage_config = StorageConfig::new(config, provider)?;
 
         let mut futs = stream::iter(
             uploaded_files
@@ -408,8 +404,8 @@ mod tests {
         );
     }
 
-    #[tokio::test]
-    async fn test_bad_storage_config() {
+    #[test]
+    fn test_bad_storage_config() {
         let mut config = config::Config::default();
         config
             .merge(config::File::from_str(
@@ -420,7 +416,7 @@ mod tests {
 
         let url_str =
             "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/src/resources/test.dat";
-        let file_paths = vec![UploadedFile {
+        let uploaded_files = vec![UploadedFile {
             dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(url_str).unwrap(),
@@ -428,11 +424,15 @@ mod tests {
             version: "blah".to_owned(),
             metadata: json!({}),
         }];
-        let error = download_files(config, file_paths)
-            .await
-            .expect_err("Missing storage config should error");
+
+        // Based on url from database, find which StorageProvider's config to use
+        let provider = StorageProviderChoices::from_url(&uploaded_files[0].url).unwrap();
+        let error =
+            StorageConfig::new(config, provider).expect_err("Missing storage config should error");
         assert!(
-            error.to_string().contains("missing field"),
+            error
+                .to_string()
+                .contains("Config file must contain a [aws_s3] section"),
             "{}",
             error.to_string()
         );
