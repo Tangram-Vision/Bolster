@@ -40,50 +40,62 @@ program. To use the configuration file with bolster, either:
 
 ```bolster config```
 
-> Echoes current config (with any overrides applied) and exits.
+Echoes current config (with any overrides applied) and exits.
+
+<br>
+
+---
 
 ```bolster upload <device_id> <path>...```
 
-> Creates a new dataset associated with the device ID and uploads all
+Creates a new dataset associated with the device ID and uploads all
 files in the provided path(s). If any path is a directory, all files in the
 directory will be uploaded. Folder structure is preserved when uploading to
 cloud storage. Does not follow symlinks.
 
-> Uploading files creates a new dataset and outputs the created dataset's
+Uploading files creates a new dataset and outputs the created dataset's
 UUID, which can be used to download or query the dataset or the files it
 contains in the future.
 
-> The `<device_id>` provided when uploading a dataset should match however
+The `<device_id>` provided when uploading a dataset should match however
 you identify your devices/robots/installations, whether that be by an
 integer (e.g. "unit 1") or a serial (e.g. "A12") or a build date (e.g.
 "12-MAY-2021") or a location (e.g. "field3" or "southwest-corner") or
 anything else. The dataset will be associated with the given device_id, to
 allow filtering datasets (and processing results) by device.
 
-> Note: Only files up to 4.88 TB may be uploaded.
+Note: Only files up to 4.88 TB may be uploaded.
 
-> When uploading a dataset, filenames must be valid UTF-8 (this is a
+When uploading a dataset, filenames must be valid UTF-8 (this is a
 requirement of cloud storage providers such as [AWS
 S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html)).
 
 ![Bolster upload example
 gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload.gif)
 
+<br>
+
+---
+
 ```bolster download <dataset_uuid> [prefix]...```
 
-> Downloads files from the given dataset. Files to download may be filtered
+Downloads files from the given dataset. Files to download may be filtered
 by providing prefix(es). If multiple prefixes are provided, all files
 matching any prefix will be downloaded.
 
-> If downloading a file would overwrite an existing file, the user is
+If downloading a file would overwrite an existing file, the user is
 prompted to continue.
 
 ![Bolster download example
 gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download.gif)
 
+<br>
+
+---
+
 ```bolster ls [OPTIONS]```
 
-> List all datasets associated with your account. Datasets may be filtered
+List all datasets associated with your account. Datasets may be filtered
 or sorted using various options (e.g. by creation date). If a specific
 dataset is selected with the `--uuid` option, files in that dataset will be
 listed.
