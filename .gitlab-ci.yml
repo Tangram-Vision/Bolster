@@ -1,41 +1,9 @@
 # CONFIGURATION
-# NOTE: `image` describes the docker image that we want this test suite
-#       to run on. For many repos with more specialized deps, this is a custom
-#       Tangram-hosted instance, e.g.
-#       `image: 'registry.gitlab.com/tangram-vision/docker-base'`.
-#       If this is the case, make sure to include SSH loading in
-#       `before_script`
-
-variables:
-  CARGO_HOME: $CI_PROJECT_DIR/cargo
-
-# For advice on caching packages, see:
-# https://doc.rust-lang.org/cargo/guide/cargo-home.html#caching-the-cargo-home-in-ci
-.paths: &cache_paths
-  - cargo/bin/
-  - cargo/registry/index/
-  - cargo/registry/cache/
-  - cargo/git/db/
-  - target/
 
 default:
-  image: "registry.gitlab.com/tangram-vision/docker-base:latest"
+  image: "registry.gitlab.com/tangram-vision-oss/bolster/ci:latest"
   before_script:
-    # Update rust in case the latest version isn't built into our "tang" docker
-    # image.
-    # For info about RUSTUP_PERMIT_COPY_RENAME, see
-    # https://github.com/rust-lang/rustup/issues/2542
-    - CARGO_HOME=/usr/local/cargo RUSTUP_PERMIT_COPY_RENAME=1 rustup update
-    # Load SSH key we can use to pull internal dependencies
-    # From: https://docs.gitlab.com/ce/ci/ssh_keys/README.html
-    - "which ssh-agent || ( apt-get update -y && apt-get install openssh-client git -y )"
-    - eval $(ssh-agent -s)
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' | ssh-add -
-  cache:
-    # Only pull the cache, don't push because it takes a while.
-    # The build_cache job populates the cache.
-    policy: pull
-    paths: *cache_paths
+    - rustup update stable
 
 stages:
   - test
@@ -46,7 +14,6 @@ stages:
 # TEST STAGE
 # - [PASS REQ] runs all unit tests in the build
 # - [PASS REQ] runs a lint checker over every piece of code
-# - [PASS REQ] checks for copyright notice at the top of all source files
 test:
   stage: test
   script:
@@ -60,14 +27,6 @@ lint:
     - rustc --version
     - cargo --version
     - cargo clippy --all-targets --all-features -- -D warnings
-
-security-check:
-  stage: test
-  variables:
-    # Catches and fails on non-zero status
-    FF_ENABLE_BASH_EXIT_CODE_CHECK: 1
-  script:
-    - security_check.sh $CI_PROJECT_DIR
 
 ##### ########## ########## ########## ########## #####
 # DOC STAGE
@@ -99,34 +58,9 @@ pages:
     - main
 
 ##### ########## ########## ########## ########## #####
-# CACHE STAGE
-# - [PASS REQ] creates a build cache for future builds. This frees up time
-#   during build cycles, and is essential when running on DigitalOcean
-#   or another like service.
+# ARTIFACTS STAGE
 # - [PASS REQ] update our badges on the project page by
 #   creating new SVG artifacts in the ci/ folder.
-build_cache:
-  stage: build_artifacts
-  script:
-    - rustc --version
-    - cargo --version
-    # Build dev-dependencies too
-    - cargo test --no-run
-    # du commands are for keeping an eye on cache size
-    # We can remove them if we're confident the cache size is sane.
-    - du -h -d3 cargo || true
-    - du -h -d2 target || true
-
-    # cargo check/clippy does weird caching things, so don't try to cache it
-    # https://github.com/rust-lang/rust-clippy/issues/4612
-    # - cargo clippy --all-targets --all-features -- -D warnings
-  cache:
-    # Push all cargo dependencies and compilation artifacts.
-    policy: push
-    paths: *cache_paths
-  only:
-    - main
-
 build_badges:
   stage: build_artifacts
   script:
