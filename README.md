@@ -25,14 +25,13 @@ cargo run -- ls --help
 To install the `bolster` app locally, do:
 
 ```
-cargo install --features=tangram-internal --path .
+cargo install --path .
 ```
 
-Run tests by running both of the below commands:
+Run tests with:
 
 ```
 cargo test
-cargo test --features=tangram-internal tests_internal
 ```
 
 To test interaction with the Datasets API you must run a local version of

@@ -12,12 +12,6 @@ CLI tool for managing sensor datasets, including upload/download and search/sort
 For more detailed documentation, visit: https://tangram-vision.gitlab.io/bolster/
 """
 
-[features]
-# Determines whether to enable upload/download from DigitalOcean Spaces.
-# External users can only use AWS S3 (because we have better control over
-# permissions with S3).
-tangram-internal = []
-
 [dependencies]
 anyhow = "1.0"
 base64 = "0.13"

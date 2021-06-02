@@ -206,9 +206,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             if datasets.is_empty() {
                 println!("No datasets found!");
             } else {
-                // TODO: Show creator for tangram-internal build
-                // Related to https://gitlab.com/tangram-vision/bolster/-/issues/11
-
                 // If user is listing a single dataset, show its files...
                 if let Some(dataset_id) = dataset_id {
                     if datasets[0].files.is_empty() {

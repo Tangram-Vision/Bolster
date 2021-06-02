@@ -97,23 +97,6 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_digitalocean_provider_unavailable() {
-        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-
-        cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
-            .arg("upload")
-            .arg("robot-01")
-            .arg("--provider=digitalocean")
-            .arg("non-existent-file")
-            .assert()
-            .failure()
-            .stderr(predicate::str::contains(
-                "'digitalocean' isn't a valid value for '--provider <PROVIDER>'",
-            ));
-    }
-
-    #[test]
     fn test_cli_no_files_in_dataset() {
         // To debug what rusoto and httpmock are doing, enable logger and run
         // tests with debug or trace level.
@@ -294,12 +277,6 @@ mod tests {
             ));
         mock.assert();
     }
-}
-
-#[cfg(all(test, feature = "tangram-internal"))]
-mod tests_internal {
-    use assert_cmd::Command;
-    use predicates::prelude::*;
 
     #[test]
     fn test_cli_digitalocean_provider_available() {
