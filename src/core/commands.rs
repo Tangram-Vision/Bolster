@@ -58,8 +58,8 @@ pub fn get_default_progress_bar_style() -> ProgressStyle {
 ///
 /// Thin wrapper around [datasets::datasets_post] -- see its documentation for
 /// behavior and possible errors.
-pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
-    let dataset = datasets::datasets_post(config, json!({})).await?;
+pub async fn create_dataset(config: &DatabaseApiConfig, device_id: String) -> Result<Uuid> {
+    let dataset = datasets::datasets_post(config, device_id, json!({})).await?;
     Ok(dataset.dataset_id)
 }
 
@@ -113,10 +113,11 @@ impl Drop for MultiProgressGuard {
 pub async fn create_and_upload_dataset(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
+    device_id: String,
     prefix: &str,
     file_paths: Vec<String>,
 ) -> Result<()> {
-    let dataset_id: Uuid = create_dataset(db_config).await?;
+    let dataset_id: Uuid = create_dataset(db_config, device_id).await?;
 
     println!("Created new dataset with UUID: {}", dataset_id);
     debug!("paths: {:?}", file_paths);
@@ -139,6 +140,11 @@ pub async fn create_and_upload_dataset(
     while let Some(res) = futs.next().await {
         res?;
     }
+
+    // After all uploads are complete, notify the backend so it can begin
+    // processing, send notifications, etc.
+    debug!("Upload(s) complete, notifying backend of completion");
+    datasets::datasets_notify_upload_complete(db_config, dataset_id).await?;
 
     Ok(())
 }

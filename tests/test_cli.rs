@@ -103,6 +103,7 @@ mod tests {
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
+            .arg("robot-01")
             .arg("--provider=digitalocean")
             .arg("non-existent-file")
             .assert()
@@ -129,6 +130,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
+                    "device_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },
@@ -160,6 +162,7 @@ mod tests {
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
+            .arg("robot-01")
             .arg(filepath)
             .assert()
             .failure()
@@ -176,6 +179,7 @@ mod tests {
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
+            .arg("robot-01")
             .arg(pathbuf)
             .assert()
             .failure()
@@ -193,6 +197,7 @@ mod tests {
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
+            .arg("robot-01")
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -303,6 +308,7 @@ mod tests_internal {
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
+            .arg("robot-01")
             .arg("--provider=digitalocean")
             .arg("non-existent-file")
             .assert()

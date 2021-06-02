@@ -19,6 +19,8 @@ pub struct Dataset {
     /// Dataset identifier, used for filtering by dataset and downloading files
     /// from the dataset.
     pub dataset_id: Uuid,
+    /// Device/robot/installation identifier, used for filtering.
+    pub device_id: String,
     /// Creation date of the dataset.
     ///
     /// The dataset is created before any files are uploaded.
