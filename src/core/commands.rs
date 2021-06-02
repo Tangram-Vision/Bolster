@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! High-level operations that roughly align with CLI subcommands.
 
 use std::{convert::TryInto, iter, sync::Arc};
@@ -63,8 +58,9 @@ pub async fn create_dataset(config: &DatabaseApiConfig, device_id: String) -> Re
     Ok(dataset.dataset_id)
 }
 
-/// Eases usage of [multiple progress bars][MultiProgress] in an async
-/// environment.
+/// Eases usage of [multiple progress
+/// bars](https://docs.rs/indicatif/0.16.2/indicatif/struct.MultiProgress.html)
+/// in an async environment.
 ///
 /// Manages annoyances with indicatif, namely that:
 /// - some thread of execution needs to join the MultiProgress to get progress
@@ -74,13 +70,18 @@ pub async fn create_dataset(config: &DatabaseApiConfig, device_id: String) -> Re
 /// - the hidden/bogus ProgressBar needs to be cleaned up (by Drop, in this
 /// implementation) when we don't need to update progress bars anymore
 pub struct MultiProgressGuard {
+    /// Pointer to the multi-progress bar, cloned internally and passed to a
+    /// tokio task to join to the bar so it renders.
     inner: Arc<MultiProgress>,
+    /// Hidden spinner progress bar to ensure the multi-progress bar stays alive
+    /// until this guard is dropped.
     hidden_spinner: ProgressBar,
 }
 
 impl MultiProgressGuard {
-    /// Initializes a [MultiProgress] (with a hidden progress bar) and joins it
-    /// to begin rendering.
+    /// Initializes a
+    /// [MultiProgress](https://docs.rs/indicatif/0.16.2/indicatif/struct.MultiProgress.html)
+    /// (with a hidden progress bar) and joins it to begin rendering.
     pub async fn new() -> Self {
         let mp = Arc::new(MultiProgress::new());
         let spinner = mp.add(ProgressBar::hidden());

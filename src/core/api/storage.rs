@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Upload and download files to/from cloud storage.
 
 use std::cmp::{max, min};
@@ -41,8 +36,13 @@ pub const CONCURRENT_REQUEST_LIMIT: usize = 10;
 /// Configuration for interacting with S3-compatible cloud storage.
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
+    /// Access and secret keys for storage provider
     credentials: StaticProvider,
+    /// Bucket name
     bucket: String,
+    /// Region/endpoint (use
+    /// [Region::Custom](https://docs.rs/rusoto_core/0.46.0/rusoto_core/enum.Region.html#variant.Custom)
+    /// for non-S3 providers)
     region: Region,
 }
 
@@ -365,7 +365,7 @@ where
     // TODO: The below async work could be changed to a more functional approach,
     // using try_buffer_unordered to limit concurrency while still exiting early
     // in case of errors. For discussion, see:
-    // https://gitlab.com/tangram-vision/bolster/-/issues/14
+    // https://gitlab.com/tangram-vision-oss/bolster/-/issues/14
 
     // Tokio threadpool spawns a thread per CPU and distributes tasks among
     // available threads, so tasks should be completed as fast as possible. We

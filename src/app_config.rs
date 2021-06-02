@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Structs and helper methods for using data in the bolster config file.
 
 use std::cmp::PartialEq;
@@ -66,8 +61,12 @@ impl Default for StorageProviderChoices {
 /// Used only for `config` subcommand to show all config.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompleteAppConfig {
+    /// Database connection and authentication details.
     pub database: Database,
+    /// Configuration values for connecting to DigitalOcean Spaces cloud
+    /// storage.
     pub digitalocean_spaces: Option<StorageApiKeys>,
+    /// Configuration values for connecting to AWS S3 cloud storage.
     pub aws_s3: Option<StorageApiKeys>,
 }
 
@@ -75,13 +74,16 @@ pub struct CompleteAppConfig {
 /// datasets database.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct DatabaseConfig {
+    /// Database connection and authentication details.
     pub database: Database,
 }
 
 /// Database connection and authentication details.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Database {
+    /// Authentication token
     pub jwt: String,
+    /// Database endpoint
     pub url: Url,
 }
 
@@ -89,19 +91,23 @@ pub struct Database {
 /// cloud storage.
 #[derive(Debug, Deserialize)]
 pub struct DigitalOceanSpacesConfig {
+    /// Authentication credentials
     pub digitalocean_spaces: StorageApiKeys,
 }
 
 /// Container for configuration values for connecting to AWS S3 cloud storage.
 #[derive(Debug, Deserialize)]
 pub struct AwsS3Config {
+    /// Authentication credentials
     pub aws_s3: StorageApiKeys,
 }
 
 /// Auth keys for S3-compatible cloud storage providers.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct StorageApiKeys {
+    /// Access key
     pub access_key: String,
+    /// Secret key
     pub secret_key: String,
 }
 

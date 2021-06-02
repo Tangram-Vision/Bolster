@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Command-line interface (subcommands, arguments, and handling)
 
 use std::{
@@ -183,8 +178,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             // TODO: Implement metadata CLI input
             // Related to
-            // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-            // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let device_id: Option<String> = handle_optional_arg(ls_matches, "device_id");
@@ -375,8 +370,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .takes_value(true),
                     // TODO: Implement metadata CLI input
                     // Related to
-                    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-                    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
                     // Arg::new("metadata")
                     //     .about("NOT IMPLEMENTED: Show dataset matching metadata")
                     //     .short('m')

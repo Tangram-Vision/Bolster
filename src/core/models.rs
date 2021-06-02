@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Serialization to/from the datasets database.
 
 use std::{path::PathBuf, vec::Vec};
@@ -112,7 +107,9 @@ pub mod notz_rfc_3339 {
     use serde::{self, Deserialize, Deserializer};
     // use serde::{self, Deserialize, Deserializer, Serializer};
 
-    // Example: 2021-05-06T23:54:45.626411+00:00
+    /// Strptime format for datetimes when deserializing from json.
+    ///
+    /// Example: 2021-05-06T23:54:45.626411+00:00
     const FORMAT: &str = "%Y-%m-%dT%H:%M:%S%.6f%:z";
 
     // The signature of a serialize_with function must follow the pattern:
@@ -139,6 +136,7 @@ pub mod notz_rfc_3339 {
     //        D: Deserializer<'de>
     //
     // although it may also be generic over the output types T.
+    /// Deserializes datetimes using [FORMAT]
     pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: Deserializer<'de>,

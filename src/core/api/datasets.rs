@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Interact with the datasets database.
 //!
 //! The datasets database stores datasets, their files, and associated metadata.
@@ -28,7 +23,7 @@ pub struct DatabaseApiConfig {
 }
 
 impl DatabaseApiConfig {
-    /// Configure HTTP client with auth, user-agent, and headers.
+    /// Configure HTTP client with endpoint, auth, and timeout.
     pub fn new_with_params(
         base_url: Url,
         bearer_access_token: String,
@@ -54,6 +49,7 @@ impl DatabaseApiConfig {
         })
     }
 
+    /// Configure HTTP client with endpoint, auth, and default 30-second timeout;
     pub fn new(base_url: Url, bearer_access_token: String) -> Result<Self> {
         let timeout = 30;
         Self::new_with_params(base_url, bearer_access_token, timeout)
@@ -102,8 +98,8 @@ pub struct DatasetGetRequest {
     pub offset: Option<usize>,
     // TODO: Implement metadata CLI input
     // Related to
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 }
 
 impl Default for DatasetGetRequest {
@@ -153,8 +149,8 @@ pub async fn datasets_get(
     }
     // TODO: Implement metadata CLI input
     // Related to
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
-    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 
     if let Some(order) = &params.order {
         req_builder = req_builder.query(&[("order", order.to_database_field())]);

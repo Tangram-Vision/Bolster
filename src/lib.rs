@@ -1,8 +1,3 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
-
 //! Bolster is a CLI from Tangram Vision for managing sensor datasets and
 //! results of processing them.
 //!
@@ -76,7 +71,7 @@
 //! requirement of cloud storage providers such as [AWS
 //! S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html)).
 //!
-//! ![Bolster upload example gif](https://tangram-vision.gitlab.io/bolster/assets/bolster-upload.gif)
+//! ![Bolster upload example gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload.gif)
 //!
 //! Example usage:
 //!
@@ -100,7 +95,7 @@
 //! If downloading a file would overwrite an existing file, the user is prompted
 //! to continue.
 //!
-//! ![Bolster download example gif](https://tangram-vision.gitlab.io/bolster/assets/bolster-download.gif)
+//! ![Bolster download example gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download.gif)
 //!
 //! Example usage:
 //!
@@ -125,7 +120,7 @@
 //! sorted using various options (e.g. by creation date). If a specific dataset
 //! is selected with the `--uuid` option, files in that dataset will be listed.
 //!
-//! ![Bolster ls example image](https://tangram-vision.gitlab.io/bolster/assets/bolster-ls.png)
+//! ![Bolster ls example image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls.png)
 //!
 //! Example usage:
 //!

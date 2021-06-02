@@ -1,7 +1,7 @@
-// Copyright (c) 2021 Tangram Robotics Inc. - All Rights Reserved
-// Unauthorized copying of this file, via any medium is strictly prohibited
-// Proprietary and confidential
-// ----------------------------
+//! Bolster is a CLI from Tangram Vision for managing sensor datasets and
+//! results of processing them.
+//!
+//! See [bolster] for further documentation.
 
 use anyhow::Result;
 
