@@ -153,7 +153,7 @@
 //! |-|-|
 //! | Configuration file not found | Bolster will use a configuration file located at `~/.config/tangram_vision/bolster.toml` by default. Alternately, provide a config file via the `--config` option, e.g. `bolster --config=path/to/bolster.toml ls`. |
 //! | Connection refused | Bolster upload/download/ls subcommands require an internet connection -- make sure your connection is working and that you can reach bolster.tangramvision.com and s3.us-west-1.amazonaws.com without interference or disruption from any firewalls or proxies. |
-//! | All file/folder names must be valid UTF-8 | All filepaths uploaded as a dataset must be valid UTF-8 as required by S3-compatible cloud storage providers. You can narrow down on what files have non-UTF-8 filepaths by looking for non-ASCII filepaths with: <code>find . &#124; perl -ne 'print if /[^[:ascii:]]/'</code>. |
+//! | All file/folder names must be valid UTF-8 | All filepaths uploaded as a dataset must be valid UTF-8 as required by S3-compatible cloud storage providers. |
 //! | File/folder paths must be relative | You may not use absolute filepaths with the upload sub-command, such as `/dir/file` or `~/dir/file`, because bolster preserves the folder structure of uploaded files. |
 //!
 //! # Security
