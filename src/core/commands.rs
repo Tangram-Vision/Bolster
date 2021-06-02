@@ -3,36 +3,69 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! High-level operations that roughly align with CLI subcommands.
+
+use std::{convert::TryInto, iter, sync::Arc};
+
 use anyhow::Result;
-use futures::stream;
-use futures::stream::StreamExt;
+use byte_unit::MEBIBYTE;
+use futures::{stream, stream::StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
 use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
 use serde_json::json;
-use std::convert::TryInto;
-use std::sync::Arc;
 use uuid::Uuid;
 
-use super::api::datasets::{self, DatabaseApiConfig, DatasetGetRequest};
-use super::api::storage;
-use super::api::storage::StorageConfig;
-use super::models::{Dataset, UploadedFile};
+use super::{
+    api::{
+        datasets::{self, DatabaseApiConfig, DatasetGetRequest},
+        storage,
+        storage::StorageConfig,
+    },
+    models::{Dataset, UploadedFile},
+};
 use crate::app_config::{CompleteAppConfig, StorageProviderChoices};
 
+/// Number of files allowed to upload at the same time.
+pub const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
+
+/// Number of files allowed to download at the same time.
+pub const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
+
+/// Files with sizes under this threshold use one-shot upload, all other files
+/// use multipart upload.
+///
+/// The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
+/// The threshold is set a bit arbitrarily -- it is above 64MB that the
+/// multipart upload starts being faster than one-shot uploads in local testing.
+/// Below 64MB, the extra overhead of extra API calls makes multipart uploads
+/// slower.
+pub const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * (MEBIBYTE as usize);
+
+/// Provides the default progress bar style
+///
+/// For a list of template fields (e.g. elapsed time, bytes remaining), see
+/// [indicatif's documentation on
+/// Templates](https://docs.rs/indicatif/0.16.2/indicatif/#templates).
 pub fn get_default_progress_bar_style() -> ProgressStyle {
     ProgressStyle::default_bar()
     .template("{prefix} [{elapsed_precise}] [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} {bytes_per_sec} ({eta})")
     .progress_chars("#>-")
 }
 
+/// Creates a dataset and returns its id.
+///
+/// Thin wrapper around [datasets::datasets_post] -- see its documentation for
+/// behavior and possible errors.
 pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
-    // TODO: create Dataset model to pass in or just json?
     let dataset = datasets::datasets_post(config, json!({})).await?;
     Ok(dataset.dataset_id)
 }
 
+/// Eases usage of [multiple progress bars][MultiProgress] in an async
+/// environment.
+///
 /// Manages annoyances with indicatif, namely that:
 /// - some thread of execution needs to join the MultiProgress to get progress
 /// bars to render
@@ -40,13 +73,15 @@ pub async fn create_dataset(config: &DatabaseApiConfig) -> Result<Uuid> {
 /// attached, so we add a hidden/bogus one
 /// - the hidden/bogus ProgressBar needs to be cleaned up (by Drop, in this
 /// implementation) when we don't need to update progress bars anymore
-struct MultiProgressGuard {
+pub struct MultiProgressGuard {
     inner: Arc<MultiProgress>,
     hidden_spinner: ProgressBar,
 }
 
 impl MultiProgressGuard {
-    async fn new() -> Self {
+    /// Initializes a [MultiProgress] (with a hidden progress bar) and joins it
+    /// to begin rendering.
+    pub async fn new() -> Self {
         let mp = Arc::new(MultiProgress::new());
         let spinner = mp.add(ProgressBar::hidden());
         let guard = MultiProgressGuard {
@@ -69,21 +104,22 @@ impl Drop for MultiProgressGuard {
     }
 }
 
+/// Creates a dataset and async uploads all provided files.
+///
+/// See [Performance][crate#performance] for details on upload concurrency.
+///
+/// Wraps [create_dataset] and [upload_file] -- see those functions for behavior
+/// and possible errors.
 pub async fn create_and_upload_dataset(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
     prefix: &str,
     file_paths: Vec<String>,
 ) -> Result<()> {
-    // TODO: create dataset and all files (w/ not-uploaded state) in single API call?
-
     let dataset_id: Uuid = create_dataset(db_config).await?;
 
     println!("Created new dataset with UUID: {}", dataset_id);
     debug!("paths: {:?}", file_paths);
-
-    // TODO: Make this configurable?
-    const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
 
     let guard = MultiProgressGuard::new().await;
     let multi_progress = guard.inner.clone();
@@ -107,6 +143,10 @@ pub async fn create_and_upload_dataset(
     Ok(())
 }
 
+/// List all datasets, optionally filtered by options in [DatasetGetRequest].
+///
+/// Thin wrapper around [datasets::datasets_get] -- see its documentation for
+/// behavior and possible errors.
 pub async fn list_datasets(
     config: &DatabaseApiConfig,
     params: &DatasetGetRequest,
@@ -116,15 +156,10 @@ pub async fn list_datasets(
     Ok(datasets)
 }
 
-/*
-pub async fn update_dataset(config: &DatabaseApiConfig, uuid: Uuid, url: &Url) -> Result<()> {
-    // TODO: change to update files (not datasets) when files are their own db table
-
-    datasets::datasets_patch(config, uuid, url)?;
-    Ok(())
-}
-*/
-
+/// Registers uploaded file (critically, its url) in the datasets database.
+///
+/// Thin wrapper around [datasets::files_post] -- see its documentation for
+/// behavior and possible errors.
 pub async fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -137,6 +172,23 @@ pub async fn add_file_to_dataset(
     Ok(())
 }
 
+/// Uploads a single file at the given path to the cloud storage provider
+/// indicated in `config` and registers the uploaded file in the datasets
+/// database.
+///
+/// Folder structure is preserved when uploading, so uploading `dir/file` is
+/// different from doing `cd dir` then uploading `file`.
+///
+/// Dispatches to [storage::upload_file_oneshot] if the file is < 64 MB or
+/// [storage::upload_file_multipart] otherwise.
+///
+/// # Errors
+///
+/// Returns an error if the file is unreadable.
+///
+/// Invokes [storage::upload_file_oneshot], [storage::upload_file_multipart],
+/// and [add_file_to_dataset] -- see those functions' documentation for
+/// additional behavior and possible errors.
 pub async fn upload_file(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
@@ -145,16 +197,6 @@ pub async fn upload_file(
     prefix: &str,
     multi_progress: &MultiProgress,
 ) -> Result<()> {
-    // This threshold determines when we switch from one-shot upload (using
-    // PutObject API) to a multipart upload (using CreateMultipartUpload,
-    // UploadPart, and CompleteMultipartUpload APIs).
-    //
-    // The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
-    // The threshold is set a bit arbitrarily -- it is above 64MB that the
-    // multipart upload starts being faster than one-shot uploads. Below 64MB,
-    // the extra overhead of extra API calls makes multipart uploads slower.
-    const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * 1024 * 1024;
-
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
@@ -189,14 +231,16 @@ pub async fn upload_file(
         add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
     }
 
-    // TODO: add progress bar for upload/download
-    // TODO: spawn upload/download task with channel back to "main" task, which receives progress updates (that it can print to stdout) until upload/download task ends
-
-    // TODO: trigger calibration pipeline after all files have uploaded successfully
-
     Ok(())
 }
 
+/// List all files in the given dataset, optionally filtered by prefixes.
+///
+/// If multiple prefixes are provided, all files matching any prefix are
+/// returned (i.e. it's a union).
+///
+/// Thin wrapper around [datasets::files_get] -- see its documentation for
+/// behavior and possible errors.
 pub async fn list_files(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -205,13 +249,19 @@ pub async fn list_files(
     datasets::files_get(config, dataset_id, prefixes).await
 }
 
+/// Download all files specified in `uploaded_files`.
+///
+/// See [Performance][crate#performance] for details on download concurrency.
+///
+/// # Errors
+///
+/// Returns an error if the url doesn't match a configured cloud storage provider.
+///
+/// Wraps [download_file] -- see its documentation for other possible errors.
 pub async fn download_files(
     config: config::Config,
     uploaded_files: Vec<UploadedFile>,
 ) -> Result<()> {
-    // TODO: Make this configurable?
-    const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
-
     if uploaded_files.is_empty() {
         Ok(())
     } else {
@@ -225,7 +275,7 @@ pub async fn download_files(
         let mut futs = stream::iter(
             uploaded_files
                 .iter()
-                .zip(std::iter::repeat_with(|| storage_config.clone()))
+                .zip(iter::repeat_with(|| storage_config.clone()))
                 .map(|(uploaded_file, local_storage_config)| {
                     download_file(local_storage_config, &uploaded_file, &multi_progress)
                 }),
@@ -239,6 +289,19 @@ pub async fn download_files(
     }
 }
 
+/// Downloads a single file.
+///
+/// Folder structure is preserved when downloading, so downloading `dir/file`
+/// will create a folder named `dir` (if it doesn't already exist) and download
+/// `file` into that folder.
+///
+/// # Errors
+///
+/// Returns an error if the url is malformed or if the destination file cannot
+/// be opened or written.
+///
+/// Wraps [storage::download_file] -- see its documentation for other possible
+/// errors.
 pub async fn download_file(
     storage_config: StorageConfig,
     uploaded_file: &UploadedFile,
@@ -251,7 +314,7 @@ pub async fn download_file(
     }
 
     let progress_bar = multi_progress.add(ProgressBar::new(uploaded_file.filesize));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(get_default_progress_bar_style());
     progress_bar.set_prefix(filepath.to_string_lossy().into_owned());
     progress_bar.set_position(0);
     let pgbar = progress_bar.clone();
@@ -272,7 +335,7 @@ pub async fn download_file(
     Ok(())
 }
 
-/// Show the configuration file
+/// Show current configuration.
 pub fn print_config(config: config::Config) -> Result<()> {
     let storage_config: CompleteAppConfig = config.try_into()?;
     println!("{}", toml::to_string(&storage_config)?);
@@ -282,10 +345,13 @@ pub fn print_config(config: config::Config) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::app_config::{DatabaseConfig, StorageProviderChoices};
-    use crate::core::api::datasets::DatabaseApiConfig;
     use chrono::Utc;
+
+    use super::*;
+    use crate::{
+        app_config::{DatabaseConfig, StorageProviderChoices},
+        core::api::datasets::DatabaseApiConfig,
+    };
 
     #[tokio::test]
     async fn test_upload_missing_file() {

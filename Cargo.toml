@@ -7,7 +7,9 @@ publish = false
 repository = "https://gitlab.com/tangram-vision/bolster"
 readme = "README.md"
 description = """
-CLI tool for managing Tangram datasets, including upload/download and search/sort/filter.
+CLI tool for managing sensor datasets, including upload/download and search/sort/filter.
+
+For more detailed documentation, visit: https://tangram-vision.gitlab.io/bolster/
 """
 
 [features]

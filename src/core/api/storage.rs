@@ -3,30 +3,44 @@
 // Proprietary and confidential
 // ----------------------------
 
-// TODO: extract common code between aws/digitalocean
+//! Upload and download files to/from cloud storage.
+
+use std::cmp::{max, min};
 
 use anyhow::{anyhow, bail, Result};
-use futures::stream::futures_unordered::FuturesUnordered;
-use futures::stream::{try_unfold, Stream, StreamExt, TryStreamExt};
+use byte_unit::{GIBIBYTE, MEBIBYTE};
+use futures::stream::{
+    futures_unordered::FuturesUnordered, try_unfold, Stream, StreamExt, TryStreamExt,
+};
 use indicatif::{MultiProgress, ProgressBar};
 use log::debug;
 use read_progress_stream::ReadProgressStream;
 use reqwest::Url;
-use rusoto_core::{request, Region};
+use rusoto_core::Region;
 use rusoto_credential::StaticProvider;
 use rusoto_s3::{
     CompleteMultipartUploadRequest, CompletedMultipartUpload, CompletedPart,
     CreateMultipartUploadRequest, GetObjectRequest, PutObjectRequest, S3Client, StreamingBody,
     UploadPartRequest, S3,
 };
-use std::cmp::min;
 use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec;
 
 #[cfg(feature = "tangram-internal")]
 use crate::app_config::DigitalOceanSpacesConfig;
-use crate::app_config::{AwsS3Config, StorageProviderChoices};
+use crate::{
+    app_config::{AwsS3Config, StorageProviderChoices},
+    core::commands,
+};
 
+/// Controls how many requests can be in-flight at a time (for one multipart
+/// file upload)
+///
+/// This controls how much of the file is read and held in RAM concurrently
+/// (chunk size also plays a part).
+pub const CONCURRENT_REQUEST_LIMIT: usize = 10;
+
+/// Configuration for interacting with S3-compatible cloud storage.
 #[derive(Debug, Clone)]
 pub struct StorageConfig {
     credentials: StaticProvider,
@@ -35,6 +49,7 @@ pub struct StorageConfig {
 }
 
 impl StorageConfig {
+    /// Initialize storage config from bolster config and a selected provider.
     pub fn new(config: config::Config, provider: StorageProviderChoices) -> Result<StorageConfig> {
         match provider {
             #[cfg(feature = "tangram-internal")]
@@ -51,8 +66,6 @@ impl StorageConfig {
                     region: Region::Custom {
                         name: "sfo2".to_owned(),
                         endpoint: "sfo2.digitaloceanspaces.com".to_owned(),
-                        // TODO: use cdn endpoint for downloads?
-                        // endpoint: "sfo2.cdn.digitaloceanspaces.com".to_owned(),
                     },
                 })
             }
@@ -71,8 +84,11 @@ impl StorageConfig {
     }
 }
 
-// This could be sync, because we only call it on files for upload_file_oneshot,
-// so the files will be small.
+/// Get the md5 hash (for checksumming) of a file.
+///
+/// # Errors
+///
+/// Returns an error if reading the file fails.
 pub async fn md5_file(path: &str) -> Result<String> {
     let tokio_file = tokio::fs::File::open(path).await?;
     // Feed file to md5 without reading whole file into RAM
@@ -91,11 +107,17 @@ pub async fn md5_file(path: &str) -> Result<String> {
     Ok(encoded)
 }
 
-// Async oneshot upload references
-// https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
-// https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
-// https://github.com/rusoto/rusoto/issues/1771
-// https://stackoverflow.com/questions/59318460/what-is-the-best-way-to-convert-an-asyncread-to-a-trystream-of-bytes
+/// Upload a file to cloud storage in a single request.
+///
+/// Uses the [S3 PutObject API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_PutObject.html).
+///
+/// # Errors
+///
+/// Returns an error if reading the file fails.
+///
+/// Returns an error if cloud storage returns a non-200 response (e.g. if auth
+/// credentials are invalid, if server is unreachable, if checksum doesn't
+/// match) or if the returned data is malformed.
 pub async fn upload_file_oneshot(
     config: StorageConfig,
     path: String,
@@ -103,6 +125,11 @@ pub async fn upload_file_oneshot(
     key: String,
     multi_progress: &MultiProgress,
 ) -> Result<(Url, String)> {
+    // Async oneshot upload references
+    // https://github.com/softprops/elblogs/blob/96df314db92216a769dc92d90a5cb0ae42bb13da/src/main.rs#L212-L223
+    // https://stackoverflow.com/questions/57810173/streamed-upload-to-s3-with-rusoto
+    // https://github.com/rusoto/rusoto/issues/1771
+    // https://stackoverflow.com/questions/59318460/what-is-the-best-way-to-convert-an-asyncread-to-a-trystream-of-bytes
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
         r => format!("s3.{}.amazonaws.com", r.name()),
@@ -114,7 +141,7 @@ pub async fn upload_file_oneshot(
     let url = Url::parse(&url_str)?;
     let md5_hash = md5_file(&path).await?;
 
-    let dispatcher = request::HttpClient::new().unwrap();
+    let dispatcher = rusoto_core::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
@@ -123,7 +150,7 @@ pub async fn upload_file_oneshot(
         codec::FramedRead::new(tokio_file, codec::BytesCodec::new()).map_ok(|bytes| bytes.freeze());
 
     let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(commands::get_default_progress_bar_style());
     progress_bar.set_prefix(path);
     progress_bar.set_position(0);
 
@@ -157,27 +184,65 @@ pub async fn upload_file_oneshot(
     Ok((url, version))
 }
 
+/// A single chunk of a larger file, identified by index number.
 #[derive(Debug)]
-struct FileChunk {
+pub struct FileChunk {
+    /// Raw file data.
     data: Vec<u8>,
+    /// Identifying index of this chunk in the file.
     part_number: i64,
 }
 
+/// Tracks how much of the file we've read.
 #[derive(Debug)]
-struct FileReadState<F>
+pub struct FileReadState<F>
 where
     F: AsyncRead + AsyncReadExt + Unpin + Send,
 {
+    /// The file being read.
     f: F,
+    /// Size of the file in bytes.
     size_in_bytes: usize,
-    // Track bytes remaining so we can size the buffer to match the last chunk,
-    // since we're using read_exact to fill the buffer.
+    /// Number of bytes remaining in the file.
+    // Tracked so we can size buffer to match last chunk (needed by read_exact).
     remaining_bytes: usize,
-    // Part number is i64 to match rusoto types
+    /// Identifying index of the next part to be read from the file.
     part_number: i64,
 }
 
-fn read_file_chunks<F>(
+/// Produce a stream of `size_in_bytes`-size chunks from file.
+///
+/// # Examples
+///
+/// Example is ignored because no bolster modules are public. Update this
+/// doctest if modules are changed to be public.
+///
+/// ```ignore
+/// # use futures::stream::StreamExt;
+/// # use log::debug;
+/// # use bolster::core::api::storage::read_file_chunks;
+/// # async fn dox() -> std::io::Result<()> {
+/// # let chunk_size: usize = 1;
+/// # let filesize: usize = 1;
+/// let tokio_file = tokio::fs::File::open("foo.txt").await?;
+/// let mut stream = read_file_chunks(tokio_file, chunk_size, filesize);
+/// while let Some(maybe_chunk) = stream.next().await {
+///     if let Ok(chunk) = maybe_chunk {
+///         debug!("Got chunk from file!");
+///     }
+///     else {
+///         debug!("Error reading chunk from file!");
+///         maybe_chunk?;
+///     }
+/// }
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Errors
+///
+/// Returns an error in the stream if reading the file fails.
+pub fn read_file_chunks<F>(
     f: F,
     size_in_bytes: usize,
     filesize: usize,
@@ -228,10 +293,19 @@ where
     }))
 }
 
-async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Result<CompletedPart> {
-    // TODO: add retry handling?
-    // https://docs.rs/tokio-retry/0.3.0/tokio_retry/
-    // TODO: count some number of retries
+/// Upload a single part/chunk to cloud storage.
+///
+/// Uses the [S3 UploadPart API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_UploadPart.html).
+///
+/// # Errors
+///
+/// Returns an error if cloud storage returns a non-200 response (e.g. if auth
+/// credentials are invalid, if server is unreachable, if checksum doesn't
+/// match) or if the returned data is malformed.
+pub async fn upload_completed_part(
+    client: &S3Client,
+    req: UploadPartRequest,
+) -> Result<CompletedPart> {
     let part_number = req.part_number;
     debug!("Making part {} upload_part request {:?}", part_number, req);
     let resp = client.upload_part(req).await;
@@ -254,22 +328,29 @@ async fn upload_completed_part(client: &S3Client, req: UploadPartRequest) -> Res
         }
         Err(e) => {
             debug!("Handling error in upload_completed_part: {}", e);
-            // TODO: timeout error is encompassed by HttpDispatchError
+            // Timeout error is encompassed by HttpDispatchError
             // https://github.com/rusoto/rusoto/issues/1530
             bail!("Upload part {} request failed: {}", part_number, e);
         }
     }
 }
 
+/// Upload all parts/chunks of a file to cloud storage.
+///
+/// # Errors
+///
+/// Returns an error if cloud storage returns a non-200 response (e.g. if auth
+/// credentials are invalid, if server is unreachable, if checksum doesn't
+/// match) or if the returned data is malformed.
 #[allow(clippy::too_many_arguments)]
-async fn upload_parts<F>(
+pub async fn upload_parts<F>(
     client: &S3Client,
     tokio_file: F,
     bucket: String,
     key: String,
     upload_id: String,
     filesize: usize,
-    // TODO: bundle these in a config object?
+    // TODO: Bundle these in a config object?
     chunk_size: usize,
     concurrent_request_limit: usize,
     progress_bar: ProgressBar,
@@ -325,6 +406,7 @@ where
                     // TODO: Progress bar updates are "chunky" (only updates
                     // after each chunk/part finishes). Is there a way to make
                     // this more smooth/fine-grained?
+                    // Related to https://gitlab.com/tangram-vision/bolster/-/issues/2
                     local_progress_bar.inc(part_size as u64);
 
                     Ok::<_, anyhow::Error>((part, local_client))
@@ -334,13 +416,6 @@ where
                 bail!("S3Client pool ran dry somehow!");
             }
 
-            // We won't handle errors from upload_completed_part until now.
-            // TODO: Improve this, perhaps by moving task creation to a task and
-            // awaiting on the union of the producer and consumer tasks.
-            //
-            // TODO: Retry UploadPart if an error raised here is of the invalid
-            // md5 digest kind:
-            // Err(Unknown(BufferedHttpResponse {status: 400, body: "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Error><Code>InvalidDigest</Code>...
             if futs.len() >= concurrent_request_limit {
                 debug!(
                     "At concurrent_request_limit for {}... awaiting request completion",
@@ -381,62 +456,87 @@ where
     Ok(parts)
 }
 
-// S3 has some limits for multipart uploads: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
-// Part numbers can go from 1-10,000
-// Max object size is 5TB
-// Part sizes can be between 5MB - 5GB
-// Requests only return 1000 parts at a time
-//
-// Given these limits, we need to pick a chunk size. We can't just always pick
-// 5MB, because then we could only upload files up to 5MB * 10000 parts = 50GB.
-// We don't want to always pick 500MB, because then if you're uploading a 1GB
-// file and hit an upload failure, you need to re-upload half of the file,
-// whereas if the chunk size had been 5MB then you'd have to reupload very
-// little.
-//
-// Also, I dislike using the full 10,000 parts because then you need to
-// implement pagination to use the ListParts API. Also, fitting 10,000 parts
-// into the CompleteMultipartUpload request makes it a big, slow request!
-//
-// So, we'll limit ourselves to 1000 parts and scale the part/chunk size along
-// with the filesize so that we use small chunks for small files (so upload
-// errors lose little progress) but we can still accommodate files up to the 5TB
-// limit, which people will hopefully use good/stable internet to upload.
-//
-// One final consideration: Small chunk sizes mean we spend more time on the
-// overhead of making requests and waiting for responses. So, we'll avoid 5MB
-// chunks and (somewhat arbitrarily) pick a larger default chunk size of 16MB.
-// When we provide resumable-upload functionality (or learn that users have
-// slow/spotty internet), it may make sense to reduce this default chunk size or
-// make it configurable.
-//
-// So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000 parts.
-// For files above 16GB, we start increasing the chunk size (ceiling'd to the
-// nearest MB). We cap out at 5000GB (4.88TB).
-const MEGABYTE: usize = 1024 * 1024;
-const GIGABYTE: usize = 1024 * MEGABYTE;
-// Technically, this is 4.88TB (5TB is 5120GB). The max part size is 5GB though,
-// and if we limit ourselves to 1000 parts, then we can only support files up to
-// 5000GB. If needed in the future, we can spend the time/effort to support
-// more than 1000 parts.
-const MAX_FILE_SIZE: usize = 5000 * GIGABYTE;
-const DEFAULT_CHUNK_SIZE: usize = 16 * MEGABYTE;
-fn derive_chunk_size(filesize: usize) -> Result<usize> {
+/// Size of each file chunk when uploading large files.
+///
+/// S3 has some limits for multipart uploads: https://docs.aws.amazon.com/AmazonS3/latest/userguide/qfacts.html
+///
+/// To summarize:
+/// - Part numbers can go from 1-10,000
+/// - Max object size is 5TB
+/// - Part sizes can be between 5MB - 5GB
+/// - Requests only return 1000 parts at a time
+///
+/// Given these limits, we need to pick a chunk size. We can't just always pick
+/// 5MB, because then we could only upload files up to 5MB * 10000 parts = 50GB.
+/// We don't want to always pick 500MB, because then if you're uploading a 1GB
+/// file and hit an upload failure, you need to re-upload half of the file,
+/// whereas if the chunk size had been 5MB then you'd have to reupload very
+/// little.
+///
+/// Also, I dislike using the full 10,000 parts because then you need to
+/// implement pagination to use the ListParts API. Also, fitting 10,000 parts
+/// into the CompleteMultipartUpload request makes it a big, slow request!
+///
+/// So, we'll limit ourselves to 1000 parts and scale the part/chunk size along
+/// with the filesize so that we use small chunks for small files (so upload
+/// errors lose little progress) but we can still accommodate files up to the
+/// 5TB limit, which people will hopefully use good/stable internet to upload.
+///
+/// One final consideration: Small chunk sizes mean we spend more time on the
+/// overhead of making requests and waiting for responses. So, we'll avoid 5MB
+/// chunks and (somewhat arbitrarily) pick a larger default chunk size of 16MB.
+/// When we provide resumable-upload functionality (or learn that users have
+/// slow/spotty internet), it may make sense to reduce this default chunk size
+/// or make it configurable.
+///
+/// So, for files from 16MB up to 16GB, we will use 16MB chunks and 1-1000
+/// parts.  For files above 16GB, we start increasing the chunk size (ceiling'd
+/// to the nearest MB). We cap out at 5000GB (4.88TB).
+pub const DEFAULT_CHUNK_SIZE: usize = 16 * (MEBIBYTE as usize);
+
+/// Maximum file size bolster can upload.
+///
+/// Technically, this max file size is 4.88TB (5000GB), not 5TB (5TB is 5120GB).
+/// The max part size is 5GB though, and if we limit ourselves to 1000 parts,
+/// then we can only support files up to 5000GB. If needed in the future, we can
+/// spend the time/effort to support more than 1000 parts.
+pub const MAX_FILE_SIZE: usize = 5000 * (GIBIBYTE as usize);
+
+/// Derive chunk size based on filesize, scaling to never need more than 1000
+/// parts/chunks.
+///
+/// For further discussion on chunk size, see [DEFAULT_CHUNK_SIZE].
+///
+/// # Errors
+///
+/// Returns an error if the file is over the [MAX_FILE_SIZE].
+pub fn derive_chunk_size(filesize: usize) -> Result<usize> {
     if filesize > MAX_FILE_SIZE {
         bail!("File is too large to upload! Limit is {}", MAX_FILE_SIZE);
     }
-    let filesize_mb = (filesize as f64) / (MEGABYTE as f64);
+    let filesize_mb = (filesize as f64) / (MEBIBYTE as f64);
     let chunk_size_mb_for_1000_parts = (filesize_mb / 1000.0).ceil() as usize;
-    Ok(std::cmp::max(
+    Ok(max(
         DEFAULT_CHUNK_SIZE,
-        chunk_size_mb_for_1000_parts * MEGABYTE,
+        chunk_size_mb_for_1000_parts * (MEBIBYTE as usize),
     ))
 }
 
-// Multipart upload references
-// https://docs.rs/s3-ext/0.2.2/s3_ext/trait.S3Ext.html#tymethod.upload_from_file_multipart
-// https://stackoverflow.com/questions/66558012/rust-aws-multipart-upload-using-rusoto-multithreaded-rayon-panicked-at-there
-// https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf
+/// Upload a file to cloud storage in chunks, using many requests.
+///
+/// Uses [S3 Multipart Upload APIs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/mpuoverview.html).
+///
+/// See [Performance][crate#performance] for details on upload concurrency.
+///
+/// # Errors
+///
+/// Returns an error if reading the file fails.
+///
+/// Returns an error if the file is over the [MAX_FILE_SIZE].
+///
+/// Returns an error if cloud storage returns a non-200 response (e.g. if auth
+/// credentials are invalid, if server is unreachable, if checksum doesn't
+/// match) or if the returned data is malformed.
 pub async fn upload_file_multipart(
     config: StorageConfig,
     path: String,
@@ -444,6 +544,10 @@ pub async fn upload_file_multipart(
     key: String,
     multi_progress: &MultiProgress,
 ) -> Result<(Url, String)> {
+    // Multipart upload references
+    // https://docs.rs/s3-ext/0.2.2/s3_ext/trait.S3Ext.html#tymethod.upload_from_file_multipart
+    // https://stackoverflow.com/questions/66558012/rust-aws-multipart-upload-using-rusoto-multithreaded-rayon-panicked-at-there
+    // https://gist.github.com/ivormetcalf/f2b8e6abfece4328c86ad1ee34363caf
     let region_endpoint = match &config.region {
         Region::Custom { endpoint, .. } => endpoint.clone(),
         r => format!("s3.{}.amazonaws.com", r.name()),
@@ -452,7 +556,7 @@ pub async fn upload_file_multipart(
     let url_str = format!("https://{}.{}/{}", config.bucket, region_endpoint, key);
     let url = Url::parse(&url_str)?;
 
-    let dispatcher = request::HttpClient::new().unwrap();
+    let dispatcher = rusoto_core::HttpClient::new().unwrap();
     // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
 
@@ -474,18 +578,11 @@ pub async fn upload_file_multipart(
     // ======
     // Upload parts
     // ======
-
-    // CONCURRENT_REQUEST_LIMIT controls how many requests can be in-flight at a
-    // time (for a single file upload), which controls how much of the file is
-    // read and held in RAM concurrently (chunk size also plays a part).
-    //
-    // TODO: Make concurrent_request_limit (or RAM usage) configurable.
-    const CONCURRENT_REQUEST_LIMIT: usize = 10;
     let chunk_size = derive_chunk_size(filesize)?;
     let tokio_file = tokio::fs::File::open(&path).await?;
 
     let progress_bar = multi_progress.add(ProgressBar::new(filesize as u64));
-    progress_bar.set_style(crate::core::commands::get_default_progress_bar_style());
+    progress_bar.set_style(commands::get_default_progress_bar_style());
     progress_bar.set_prefix(path);
     progress_bar.set_position(0);
     let pgbar = progress_bar.clone();
@@ -531,10 +628,18 @@ pub async fn upload_file_multipart(
     Ok((url, version))
 }
 
+/// Download a file from cloud storage.
+///
+/// Uses the [S3 GetObject API](https://docs.aws.amazon.com/AmazonS3/latest/API/API_GetObject.html).
+///
+/// # Errors
+///
+/// Returns an error if the url to download is malformed.
+///
+/// Returns an error if cloud storage returns a non-200 response (e.g. if auth
+/// credentials are invalid, if server is unreachable, if checksum doesn't
+/// match) or if the returned data is malformed.
 pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_core::ByteStream> {
-    // TODO: Is there a better way to do this, like how try_from works for getting upload config?
-
-    // TODO: store provider, bucket, and key separately in database?
     let key = url
         .path()
         .strip_prefix("/")
@@ -542,11 +647,9 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
 
     // Increase read buffer size in rusoto:
     // https://www.rusoto.org/performance.html
-    // TODO: test the effect of this change!
-    let mut http_config = request::HttpConfig::new();
-    http_config.read_buf_size(2 * 1024 * 1024);
-    let dispatcher = request::HttpClient::new_with_config(http_config).unwrap();
-    // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
+    let mut http_config = rusoto_core::HttpConfig::new();
+    http_config.read_buf_size(2 * (MEBIBYTE as usize));
+    let dispatcher = rusoto_core::HttpClient::new_with_config(http_config).unwrap();
     let client = S3Client::new_with(dispatcher, config.credentials, config.region);
     let req = GetObjectRequest {
         bucket: config.bucket,
@@ -564,12 +667,12 @@ pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_co
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
+    use httpmock::{Method::GET, MockServer};
     use predicates::prelude::*;
     use rusoto_mock::{MockCredentialsProvider, MockRequestDispatcher};
     use tokio_test::io::Builder;
+
+    use super::*;
 
     #[tokio::test]
     async fn test_download_file_403_forbidden() {
@@ -926,19 +1029,21 @@ mod tests {
         );
         assert_eq!(
             derive_chunk_size(DEFAULT_CHUNK_SIZE * 1000 + 1).unwrap(),
-            DEFAULT_CHUNK_SIZE + MEGABYTE
+            DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)
         );
         assert_eq!(
-            derive_chunk_size((DEFAULT_CHUNK_SIZE + MEGABYTE) * 1000).unwrap(),
-            DEFAULT_CHUNK_SIZE + MEGABYTE
+            derive_chunk_size((DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)) * 1000).unwrap(),
+            DEFAULT_CHUNK_SIZE + (MEBIBYTE as usize)
         );
         assert_eq!(
             // 5 TB (almost)
-            derive_chunk_size(5000 * GIGABYTE).unwrap(),
-            5 * GIGABYTE
+            derive_chunk_size(5000 * (GIBIBYTE as usize)).unwrap(),
+            5 * (GIBIBYTE as usize)
         );
 
-        let e = derive_chunk_size(5001 * GIGABYTE).unwrap_err().to_string();
+        let e = derive_chunk_size(5001 * (GIBIBYTE as usize))
+            .unwrap_err()
+            .to_string();
         assert_eq!(
             true,
             predicate::str::contains("File is too large to upload").eval(&e)

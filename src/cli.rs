@@ -3,28 +3,39 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Command-line interface (subcommands, arguments, and handling)
+
+use std::{
+    fmt::Display,
+    io::{self, Write},
+    path::{Path, PathBuf},
+    str::FromStr,
+};
+
 use anyhow::{anyhow, bail, Result};
 use byte_unit::Byte;
 use chrono::NaiveDate;
-use clap::{crate_authors, crate_description, crate_version};
-use clap::{App, AppSettings, Arg};
-use std::io::{self, Write};
-use std::path::{Path, PathBuf};
-use std::str::FromStr;
+use clap::{crate_authors, crate_description, crate_version, App, AppSettings, Arg};
 use strum::VariantNames;
 use uuid::Uuid;
 use walkdir::WalkDir;
 
-use crate::app_config::{DatabaseConfig, StorageProviderChoices};
-use crate::core::api::datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering};
-use crate::core::api::storage;
-use crate::core::commands;
+use crate::{
+    app_config::{DatabaseConfig, StorageProviderChoices},
+    core::{
+        api::{
+            datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering},
+            storage,
+        },
+        commands,
+    },
+};
 
-/// Extract optional arg with a specific type, exiting on parse error
+/// Extract optional arg with a specific type, exiting on parse error.
 pub fn handle_optional_arg<T>(matches: &clap::ArgMatches, arg_name: &str) -> Option<T>
 where
     T: FromStr,
-    <T as FromStr>::Err: std::fmt::Display,
+    <T as FromStr>::Err: Display,
 {
     match matches.value_of_t(arg_name) {
         Ok(val) => Some(val),
@@ -36,7 +47,20 @@ where
     }
 }
 
-/// Match commands
+/// Process provided CLI subcommands and options.
+///
+/// # Errors
+///
+/// Exits with an error message if any command-line arguments are missing but
+/// required or if arguments are malformed (e.g. expected a UUID but the
+/// provided value isn't one).
+///
+/// Returns an error if creating a dataset and the provided filepaths are
+/// absolute (they must be relative so folder structure can be preserved in
+/// cloud storage) or if any filepaths are not valid UTF-8.
+///
+/// Returns an error if any lower-level commands (e.g. for uploading or
+/// downloading)
 #[tokio::main]
 pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) -> Result<()> {
     // Handle config subcommand first, because it doesn't need any valid configuration, and is helpful for debugging bad config!
@@ -51,11 +75,11 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
-        Some(("create", create_matches)) => {
+        Some(("upload", upload_matches)) => {
             let provider =
-                StorageProviderChoices::from_str(create_matches.value_of("provider").unwrap())?;
-            let mut file_paths: Vec<&Path> = create_matches
-                .values_of_os("PATH")
+                StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
+            let mut file_paths: Vec<&Path> = upload_matches
+                .values_of_os("path")
                 .unwrap()
                 .map(|os_str| Path::new(os_str))
                 .collect::<Vec<&Path>>();
@@ -103,7 +127,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .map(|path_str| path_str.to_owned())
                 .collect::<Vec<String>>();
 
-            let skip_prompt = create_matches.is_present("yes");
+            let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {
                 println!("Creating a dataset of {} file(s)", utf8_file_paths.len());
             } else {
@@ -121,13 +145,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     return Ok(());
                 }
             }
-            // for each path,
-            //   if it's a folder, collect all files inside recursively
-            //   if it's a file, collect it
-            // prompt that file list is correct
-            // pass file list to command
 
-            // TODO: test non-utf8 filename or force utf8
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let prefix = db.user_id_from_jwt()?.to_string();
             commands::create_and_upload_dataset(
@@ -159,13 +177,15 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 }
             }
 
-            // TODO: implement metadata CLI input
+            // TODO: Implement metadata CLI input
+            // Related to
+            // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+            // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
-            // TODO: implement order
             let order: Option<DatasetOrdering> = handle_optional_arg(ls_matches, "order");
 
             let get_params = DatasetGetRequest {
@@ -182,8 +202,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             if datasets.is_empty() {
                 println!("No datasets found!");
             } else {
-                // TODO: use generic, customizable formatter (e.g. kubernetes get)
-                // TODO: show creator for tangram-internal build
+                // TODO: Show creator for tangram-internal build
+                // Related to https://gitlab.com/tangram-vision/bolster/-/issues/11
 
                 // If user is listing a single dataset, show its files...
                 if let Some(dataset_id) = dataset_id {
@@ -273,8 +293,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
     Ok(())
 }
 
-/// Configure Clap
-/// This function will configure clap and match arguments
+/// Configures CLI arguments and help messages.
 pub fn cli_config() -> Result<clap::ArgMatches> {
     // Can't get default enum variant's &'static str, so own it here
     let default_storage_provider = StorageProviderChoices::default();
@@ -288,15 +307,15 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             Arg::new("config")
                 .short('c')
                 .long("config")
-                .value_name("FILE")
+                .value_name("file")
                 .about("Set a custom config file")
                 .takes_value(true),
         )
         .subcommand(
-            App::new("create")
-                .about("Create + upload a new dataset")
+            App::new("upload")
+                .about("Upload files, creating a new remote dataset")
                 .arg(
-                    Arg::new("PATH")
+                    Arg::new("path")
                         .about("Path(s) to folder(s) or file(s) to upload")
                         .required(true)
                         .takes_value(true)
@@ -319,7 +338,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .possible_values(StorageProviderChoices::VARIANTS)
                         .takes_value(true),
                 ),
-                // TODO: add -y/--yes to skip prompt
         )
         .subcommand(
             App::new("ls")
@@ -338,13 +356,16 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("before-date")
                         .value_name("DATE")
                         .takes_value(true),
-                    // TODO: implement metadata
-                    Arg::new("metadata")
-                        .about("NOT IMPLEMENTED: Show dataset matching metadata")
-                        .short('m')
-                        .long("metadata")
-                        .value_name("???")
-                        .takes_value(true),
+                    // TODO: Implement metadata CLI input
+                    // Related to
+                    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+                    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
+                    // Arg::new("metadata")
+                    //     .about("NOT IMPLEMENTED: Show dataset matching metadata")
+                    //     .short('m')
+                    //     .long("metadata")
+                    //     .value_name("???")
+                    //     .takes_value(true),
                     Arg::new("dataset_uuid")
                         .about("Show files in dataset matching uuid")
                         .short('u')
@@ -394,8 +415,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .about("Download files in remote dataset")
                 .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
                 .arg(Arg::new("prefix").about("All files with names starting with a prefix will be downloaded").takes_value(true).multiple(true))
-            // TODO: add arg to filter file(s) to download from dataset?
-            // TODO: add path to download files to?
+            // TODO: Add path to download files to?
         )
         .subcommand(App::new("config").about("Show Configuration"));
 

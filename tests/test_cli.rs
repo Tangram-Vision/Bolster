@@ -5,15 +5,16 @@
 
 #[cfg(test)]
 mod tests {
+    use std::{
+        ffi::OsString,
+        os::unix::ffi::OsStringExt,
+        path::{Path, PathBuf},
+    };
+
     use assert_cmd::Command;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
+    use httpmock::{Method::GET, MockServer};
     use predicates::prelude::*;
     use serde_json::json;
-    use std::ffi::OsString;
-    use std::os::unix::ffi::OsStringExt;
-    use std::path::Path;
-    use std::path::PathBuf;
 
     #[test]
     fn test_cli() {
@@ -101,7 +102,7 @@ mod tests {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("create")
+            .arg("upload")
             .arg("--provider=digitalocean")
             .arg("non-existent-file")
             .assert()
@@ -149,7 +150,7 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_create_disallows_absolute_filepath() {
+    fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let filepath = Path::new("src/resources/test_full_config.toml")
             .canonicalize()
@@ -158,7 +159,7 @@ mod tests {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("create")
+            .arg("upload")
             .arg(filepath)
             .assert()
             .failure()
@@ -167,14 +168,14 @@ mod tests {
             ));
     }
     #[test]
-    fn test_cli_create_disallows_non_utf8() {
+    fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("create")
+            .arg("upload")
             .arg(pathbuf)
             .assert()
             .failure()
@@ -184,14 +185,14 @@ mod tests {
     }
 
     #[test]
-    fn test_cli_create_lists_files_and_prompts() {
+    fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let filepath = Path::new("src/resources/test_full_config.toml");
         assert!(filepath.is_relative());
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("create")
+            .arg("upload")
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -301,7 +302,7 @@ mod tests_internal {
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
-            .arg("create")
+            .arg("upload")
             .arg("--provider=digitalocean")
             .arg("non-existent-file")
             .assert()

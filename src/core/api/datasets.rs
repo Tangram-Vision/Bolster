@@ -3,23 +3,32 @@
 // Proprietary and confidential
 // ----------------------------
 
+//! Interact with the datasets database.
+//!
+//! The datasets database stores datasets, their files, and associated metadata.
+
+use std::time::Duration;
+
 use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use log::debug;
 use reqwest::{header, Url};
 use serde_json::json;
-use std::time::Duration;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
 use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
 
+/// Configuration for interacting with the datasets database.
 pub struct DatabaseApiConfig {
+    /// URL endpoint
     pub base_url: Url,
+    /// HTTP client
     pub client: reqwest::Client,
 }
 
 impl DatabaseApiConfig {
+    /// Configure HTTP client with auth, user-agent, and headers.
     pub fn new_with_params(
         base_url: Url,
         bearer_access_token: String,
@@ -51,38 +60,48 @@ impl DatabaseApiConfig {
     }
 }
 
-// Only allow a single sort key for now
+/// Available dataset sorting options
 #[derive(EnumString, EnumVariantNames, Display, Debug)]
 pub enum DatasetOrdering {
+    /// Sort by dataset creation date, ascending (i.e. oldest first)
     #[strum(serialize = "created_date.asc")]
     CreatedDateAsc,
+    /// Sort by dataset creation date, descending (i.e. most recent first)
     #[strum(serialize = "created_date.desc")]
     CreatedDateDesc,
 }
 
 impl DatasetOrdering {
-    // For possible dataset ordering options where the CLI name (e.g. "creator")
-    // doesn't match the API/database name (e.g. "creator_role"), translate
-    // between them
-    fn to_database_field(&self) -> String {
-        match self {
-            // DatasetOrdering::CreatorAsc => "creator_role.asc".to_owned(),
-            // DatasetOrdering::CreatorDesc => "creator_role.desc".to_owned(),
-            other => other.to_string(),
-            // TODO: test order by creator
-        }
+    /// Translates between CLI sorting option value (e.g. "date") and database
+    /// column (e.g. "created_date"), if necessary.
+    pub fn to_database_field(&self) -> String {
+        self.to_string()
     }
 }
 
+/// Options for filtering dataset list query.
 #[derive(Debug)]
 pub struct DatasetGetRequest {
+    /// Filter to a specific dataset
     pub dataset_id: Option<Uuid>,
+    /// Filter to datasets before a date
     pub before_date: Option<NaiveDate>,
+    /// Filter to datasets after a date
     pub after_date: Option<NaiveDate>,
-    // TODO: implement metadata: Option<String>,
+    /// Order query results by a field (e.g. created_date) and direction (e.g.
+    /// ascending).
     pub order: Option<DatasetOrdering>,
+    /// Number of datasets to show (default=20, max=100).
     pub limit: Option<usize>,
+    /// Skip N results (for pagination).
+    ///
+    /// Warning: Results may shift between subsequent bolster invocations if new
+    /// datasets are being added at the same time.
     pub offset: Option<usize>,
+    // TODO: Implement metadata CLI input
+    // Related to
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 }
 
 impl Default for DatasetGetRequest {
@@ -98,39 +117,13 @@ impl Default for DatasetGetRequest {
     }
 }
 
-/*
-pub fn datasets_patch(
-    configuration: &DatabaseApiConfig,
-    uuid: Uuid,
-    new_url: &Url,
-) -> Result<Dataset> {
-    debug!("building patch request for: {}", uuid);
-    let client = &configuration.client;
-
-    let mut api_url = configuration.base_url.clone();
-    api_url.set_path("datasets");
-    let mut req_builder = client.patch(api_url.as_str());
-
-    req_builder = req_builder.query(&[("uuid", format!("eq.{}", uuid.to_string()))]);
-
-    let req_body = json!({ "url": new_url });
-    req_builder = req_builder.json(&req_body);
-
-    let request = req_builder.build()?;
-    let response = client.execute(request)?.error_for_status()?;
-
-    debug!("status: {}", response.status());
-    let content = response.text()?;
-    debug!("response content: {}", content);
-
-    let mut datasets: Vec<Dataset> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
-    datasets
-        .pop()
-        .ok_or_else(|| anyhow!("Database returned no info for updated Dataset!"))
-}
-*/
-
+/// Get a list of datasets and their files.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn datasets_get(
     configuration: &DatabaseApiConfig,
     params: &DatasetGetRequest,
@@ -152,10 +145,10 @@ pub async fn datasets_get(
     if let Some(after_date) = &params.after_date {
         req_builder = req_builder.query(&[("created_date", format!("gte.{}", after_date))]);
     }
-    // TODO: implement metadata
-    // if let Some(metadata) = params.metadata {
-    //     req_builder = req_builder.query(&[("metadata", format!("eq.{}", metadata))]);
-    // }
+    // TODO: Implement metadata CLI input
+    // Related to
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/1
+    // - https://gitlab.com/tangram-vision/bolster/-/issues/4
 
     if let Some(order) = &params.order {
         req_builder = req_builder.query(&[("order", order.to_database_field())]);
@@ -179,11 +172,18 @@ pub async fn datasets_get(
     Ok(datasets)
 }
 
+/// Create a new dataset in the datasets database.
+///
+/// The returned dataset contains the dataset's id, which should be recorded to
+/// query for this dataset or download its files in the future.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
-    // TODO: change this to just the metadata value and package that value into
-    // the "metadata" key in the request body in this function.
-    // Or send in a Dataset struct so serde can serialize that directly.
     request_body: serde_json::Value,
 ) -> Result<DatasetNoFiles> {
     debug!("building post request for: {:?}", request_body);
@@ -202,7 +202,6 @@ pub async fn datasets_post(
     let content = response.text().await?;
     debug!("content: {}", content);
 
-    // TODO: save json to file and prompt user to send it to us?
     let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
         .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
     // PostgREST resturns a list, even when only a single object is expected
@@ -212,6 +211,14 @@ pub async fn datasets_post(
         .ok_or_else(|| anyhow!("Database returned no info for newly-created Dataset!"))
 }
 
+/// Get a list of files in a specified dataset, optionally filtered by
+/// prefix(es).
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn files_get(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
@@ -261,9 +268,15 @@ pub async fn files_get(
     Ok(files)
 }
 
+/// Create a new file in a specified dataset.
+///
+/// # Errors
+///
+/// Returns an error if the datasets server returns a non-200 response (e.g. if
+/// auth credentials are invalid, if server is unreachable) or if the returned
+/// data is malformed (e.g. not json).
 pub async fn files_post(
     configuration: &DatabaseApiConfig,
-    // TODO: change this to a Dataset struct
     dataset_id: Uuid,
     url: &Url,
     filesize: usize,
@@ -288,7 +301,8 @@ pub async fn files_post(
 
     let response = req_builder.send().await?;
     response.error_for_status_ref()?;
-    // TODO: add context to 409 response (dataset doesn't exist) OR validate it does before uploading to storage provider
+    // TODO: Add context to 409 response (dataset doesn't exist) OR validate it
+    // does before uploading to storage provider.
 
     debug!("status: {}", response.status());
     let content = response.text().await?;
@@ -303,10 +317,11 @@ pub async fn files_post(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use httpmock::Method::GET;
-    use httpmock::MockServer;
     use std::str::FromStr;
+
+    use httpmock::{Method::GET, MockServer};
+
+    use super::*;
 
     #[tokio::test]
     async fn test_datasets_get_success() {
