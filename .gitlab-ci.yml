@@ -18,7 +18,6 @@ variables:
   - cargo/git/db/
   - target/
 
-
 default:
   image: "registry.gitlab.com/tangram-vision/docker-base:latest"
   before_script:
@@ -38,12 +37,10 @@ default:
     policy: pull
     paths: *cache_paths
 
-
 stages:
   - test
   - doc
   - build_artifacts
-
 
 ##### ########## ########## ########## ########## #####
 # TEST STAGE
@@ -95,6 +92,7 @@ pages:
     - cargo doc --no-deps --document-private-items
     - mkdir public
     - cp -r target/doc/* public
+    - cp -r assets public/
     - LOWERCASE_PROJECT_NAME=$(echo $CI_PROJECT_NAME | awk '{print tolower($0)}') && echo "<meta http-equiv=refresh content=0;url=$LOWERCASE_PROJECT_NAME>" > public/index.html
   artifacts:
     paths:
