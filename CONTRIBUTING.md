@@ -11,7 +11,7 @@ Visit the [repository homepage on GitLab here](https://gitlab.com/tangram-vision
 ## tl;dr
 
 - Use the GitLab repository (above) to submit issues and merge requests.
-- Check the documentation.
+- Check the documentation, including the [architecture doc](ARCHITECTURE.md)
 - Bugs and enhancements should be categorized and explained to the best of the submitter's ability; guidelines below.
 - Merge Requests must pass unit and integration tests before accepted.
 - Follow our commit message guidelines.
