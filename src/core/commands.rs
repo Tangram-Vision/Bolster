@@ -1,4 +1,6 @@
 //! High-level operations that roughly align with CLI subcommands.
+//!
+//! For overall architecture, see [ARCHITECTURE.md](https://gitlab.com/tangram-vision-oss/bolster/-/blob/main/ARCHITECTURE.md)
 
 use std::{convert::TryInto, iter, sync::Arc};
 
