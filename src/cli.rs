@@ -80,6 +80,14 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let prefix = db.user_id_from_jwt()?.to_string();
 
             let device_id: String = upload_matches.value_of_t_or_exit::<String>("device_id");
+            let plex_path: &Path = Path::new(upload_matches.value_of_os("plex_path").unwrap());
+            if !plex_path.is_file() {
+                bail!("Plex file {:?} does not exist or is unreadable", plex_path);
+            }
+            let utf8_plex_path = plex_path.to_str().ok_or_else(||
+                anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", plex_path)
+            )?.to_owned();
+
             let mut file_paths: Vec<&Path> = upload_matches
                 .values_of_os("path")
                 .unwrap()
@@ -122,7 +130,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let utf8_file_paths = file_paths
                 .into_iter()
                 .map(|path| path.to_str().ok_or_else( ||
-                    anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {}", path.display())
+                    anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", path)
                 ))
                 .collect::<Result<Vec<&str>>>()?
                 .into_iter()
@@ -134,10 +142,10 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 println!("Creating a dataset of {} file(s)", utf8_file_paths.len());
             } else {
                 println!(
-                    "This command will create a dataset of {} file(s):",
+                    "This command will create a dataset with a plex and {} data file(s):",
                     utf8_file_paths.len()
                 );
-                println!("\t{}", utf8_file_paths.join("\n\t"));
+                println!("\t{}\n\t{}", utf8_plex_path, utf8_file_paths.join("\n\t"));
                 print!("Continue? [y/n] ");
                 io::stdout().flush()?;
 
@@ -325,6 +333,13 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                                 device/robot/installation that produced the \
                                 dataset. Useful for filtering datasets and \
                                 results.")
+                        .required(true)
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::new("plex_path")
+                        .about("Path to .plex file describing device's sensor \
+                                configuration")
                         .required(true)
                         .takes_value(true)
                 )

@@ -132,6 +132,7 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
         let filepath = Path::new("src/resources/test_full_config.toml")
             .canonicalize()
             .unwrap();
@@ -141,6 +142,7 @@ mod tests {
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -151,6 +153,7 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
         let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
@@ -158,7 +161,27 @@ mod tests {
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
             .arg(pathbuf)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "All file/folder names must be valid UTF-8",
+            ));
+    }
+    #[test]
+    fn test_cli_upload_disallows_non_utf8_plex_path() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let filepath = Path::new("src/resources/test.plex");
+        let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        std::fs::write(plex_pathbuf.as_path(), "bolster test").unwrap();
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_pathbuf)
+            .arg(filepath)
             .assert()
             .failure()
             .stderr(predicate::str::contains(
@@ -169,6 +192,7 @@ mod tests {
     #[test]
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
         let filepath = Path::new("src/resources/test_full_config.toml");
         assert!(filepath.is_relative());
 
@@ -176,6 +200,7 @@ mod tests {
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -276,15 +301,37 @@ mod tests {
     #[test]
     fn test_cli_digitalocean_provider_available() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg("--provider=digitalocean")
+            .arg(plex_filepath)
             .arg("non-existent-file")
             .assert()
             .failure()
             .stderr(predicate::str::contains("is not a directory or a file"));
+    }
+
+    #[test]
+    fn test_cli_plex_file_must_exist() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/non-existent.plex");
+        let filepath = Path::new("src/resources/test_full_config.toml");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(format!(
+                "Plex file {:?} does not exist or is unreadable",
+                plex_filepath
+            )));
     }
 }
