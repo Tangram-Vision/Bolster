@@ -198,8 +198,7 @@ mod tests {
             .filepath_from_url()
             .expect_err("Url doesn't contain the dataset-id")
             .to_string();
-        assert_eq!(
-            true,
+        assert!(
             predicate::str::is_match("File url .* doesn't contain dataset-id.")
                 .unwrap()
                 .eval(&e)

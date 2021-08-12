@@ -644,7 +644,7 @@ pub async fn upload_file_multipart(
 pub async fn download_file(config: StorageConfig, url: &Url) -> Result<rusoto_core::ByteStream> {
     let key = url
         .path()
-        .strip_prefix("/")
+        .strip_prefix('/')
         .ok_or_else(|| anyhow!("URL path didn't start with /: {}", url.path()))?;
 
     // Increase read buffer size in rusoto:
@@ -894,9 +894,8 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert_eq!(
-            true,
-            predicate::str::contains("Response for upload part 1 is missing ETag header!").eval(&e)
+        assert!(
+            predicate::str::contains("Response for upload part 1 is missing ETag header!").eval(&e),
         );
     }
 
@@ -928,10 +927,7 @@ mod tests {
             .await
             .unwrap_err()
             .to_string();
-        assert_eq!(
-            true,
-            predicate::str::contains("my timeout message").eval(&e)
-        );
+        assert!(predicate::str::contains("my timeout message").eval(&e));
     }
 
     #[tokio::test]
@@ -969,10 +965,7 @@ mod tests {
         .await
         .unwrap_err()
         .to_string();
-        assert_eq!(
-            true,
-            predicate::str::contains("Reading file failed").eval(&e)
-        );
+        assert!(predicate::str::contains("Reading file failed").eval(&e));
     }
 
     #[tokio::test]
@@ -1013,10 +1006,7 @@ mod tests {
         .await
         .unwrap_err()
         .to_string();
-        assert_eq!(
-            true,
-            predicate::str::contains("my timeout message").eval(&e)
-        );
+        assert!(predicate::str::contains("my timeout message").eval(&e));
     }
 
     #[test]
@@ -1046,9 +1036,6 @@ mod tests {
         let e = derive_chunk_size(5001 * (GIBIBYTE as usize))
             .unwrap_err()
             .to_string();
-        assert_eq!(
-            true,
-            predicate::str::contains("File is too large to upload").eval(&e)
-        );
+        assert!(predicate::str::contains("File is too large to upload").eval(&e));
     }
 }

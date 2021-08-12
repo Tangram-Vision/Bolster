@@ -227,8 +227,7 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5ZjQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3NjQ4fQ"),
         };
-        assert_eq!(
-            true,
+        assert!(
             predicate::str::contains("expected 3 period-delimited segments")
                 .eval(&db.user_id_from_jwt().unwrap_err().to_string())
         );
@@ -240,11 +239,8 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("not.base64.encoded"),
         };
-        assert_eq!(
-            true,
-            predicate::str::contains("expected base64 encoding")
-                .eval(&db.user_id_from_jwt().unwrap_err().to_string())
-        );
+        assert!(predicate::str::contains("expected base64 encoding")
+            .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
     }
 
     #[test]
@@ -253,11 +249,8 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("//5iAGwAYQBoAA==.//5iAGwAYQBoAA==.//5iAGwAYQBoAA=="),
         };
-        assert_eq!(
-            true,
-            predicate::str::contains("isn't valid UTF-8")
-                .eval(&db.user_id_from_jwt().unwrap_err().to_string())
-        );
+        assert!(predicate::str::contains("isn't valid UTF-8")
+            .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
     }
 
     #[test]
@@ -266,11 +259,8 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("YmxhaA==.YmxhaA==.YmxhaA=="),
         };
-        assert_eq!(
-            true,
-            predicate::str::contains("doesn't contain valid JSON")
-                .eval(&db.user_id_from_jwt().unwrap_err().to_string())
-        );
+        assert!(predicate::str::contains("doesn't contain valid JSON")
+            .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
     }
 
     #[test]
@@ -279,8 +269,7 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJibGFoIjoiYmxhaCJ9.5Oi7vKR1ur19mUy8UH_QALnKXCdWuWP9MiPCXbPb49g"),
         };
-        assert_eq!(
-            true,
+        assert!(
             predicate::str::contains("doesn't contain expected field: user_id")
                 .eval(&db.user_id_from_jwt().unwrap_err().to_string())
         );
@@ -292,11 +281,8 @@ mod tests {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiYmxhaCJ9.SLDLrwQwp3a6GNga05HFipYnMpsWizwzBpfp78wTaHg"),
         };
-        assert_eq!(
-            true,
-            predicate::str::contains("user_id isn't a valid UUID")
-                .eval(&db.user_id_from_jwt().unwrap_err().to_string())
-        );
+        assert!(predicate::str::contains("user_id isn't a valid UUID")
+            .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
     }
     #[test]
     fn test_digitalocean_provider_available() {
