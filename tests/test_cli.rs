@@ -222,6 +222,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     // We don't actually want to try to download from cloud
@@ -232,6 +233,7 @@ mod tests {
                     "version": "blah",
                     "metadata": {},
                 }, {
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
@@ -270,6 +272,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     // We don't actually want to try to download from cloud

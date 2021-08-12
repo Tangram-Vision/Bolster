@@ -4,7 +4,7 @@
 
 use std::{convert::TryInto, iter, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use byte_unit::MEBIBYTE;
 use futures::{stream, stream::StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
@@ -118,6 +118,7 @@ pub async fn create_and_upload_dataset(
     db_config: &DatabaseApiConfig,
     device_id: String,
     prefix: &str,
+    plex_file_path: String,
     file_paths: Vec<String>,
 ) -> Result<()> {
     let dataset_id: Uuid = create_dataset(db_config, device_id).await?;
@@ -127,27 +128,47 @@ pub async fn create_and_upload_dataset(
 
     let guard = MultiProgressGuard::new().await;
     let multi_progress = guard.inner.clone();
+    let mut maybe_plex_file_id = None;
 
-    let mut futs = stream::iter(file_paths.into_iter().map(|path| {
-        // Uploads to storage AND registers to database
-        upload_file(
-            config.clone(),
-            db_config,
-            dataset_id,
-            path,
-            prefix,
-            &multi_progress,
-        )
-    }))
-    .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
-    while let Some(res) = futs.next().await {
-        res?;
+    // Add plex file path to front of list that will become upload futures
+    let mut all_file_paths = file_paths.clone();
+    all_file_paths.insert(0, plex_file_path.clone());
+
+    let mut futs = stream::iter(all_file_paths)
+        .map(|path| async {
+            // Returns tuple of (is_plex, Result<UploadedFile, Error>)
+            (
+                // If path is the plex path, mark this as the plex so we can
+                // pull out the plex's file_id to associate as the input plex
+                // when triggering calibration.
+                path == plex_file_path,
+                // Uploads to storage AND registers to database
+                upload_file(
+                    config.clone(),
+                    db_config,
+                    dataset_id,
+                    path,
+                    prefix,
+                    &multi_progress,
+                )
+                .await,
+            )
+        })
+        .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
+    while let Some((is_plex, res)) = futs.next().await {
+        let uploaded_file = res?;
+        if is_plex {
+            maybe_plex_file_id = Some(uploaded_file.file_id);
+        }
     }
 
     // After all uploads are complete, notify the backend so it can begin
     // processing, send notifications, etc.
     debug!("Upload(s) complete, notifying backend of completion");
-    datasets::datasets_notify_upload_complete(db_config, dataset_id).await?;
+
+    let plex_file_id = maybe_plex_file_id
+        .ok_or_else(|| anyhow!("Unable to retrieve file_id for uploaded plex file!"))?;
+    datasets::datasets_notify_upload_complete(db_config, dataset_id, plex_file_id).await?;
 
     Ok(())
 }
@@ -176,9 +197,8 @@ pub async fn add_file_to_dataset(
     filesize: usize,
     version: String,
     metadata: serde_json::Value,
-) -> Result<()> {
-    datasets::files_post(config, dataset_id, url, filesize, version, metadata).await?;
-    Ok(())
+) -> Result<UploadedFile> {
+    datasets::files_post(config, dataset_id, url, filesize, version, metadata).await
 }
 
 /// Uploads a single file at the given path to the cloud storage provider
@@ -205,7 +225,7 @@ pub async fn upload_file(
     path: String,
     prefix: &str,
     multi_progress: &MultiProgress,
-) -> Result<()> {
+) -> Result<UploadedFile> {
     // We retain any directories in the path
     let key = format!("{}/{}/{}", prefix, dataset_id, path);
     debug!("key {}", key);
@@ -225,22 +245,20 @@ pub async fn upload_file(
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
         let (url, version) =
-            storage::upload_file_oneshot(config, path, filesize, key, &multi_progress).await?;
+            storage::upload_file_oneshot(config, path, filesize, key, multi_progress).await?;
         // Register uploaded file to database
-        add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
+        add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
     } else {
         debug!(
             "Filesize {} > threshold {} so doing multipart",
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
         let (url, version) =
-            storage::upload_file_multipart(config, path, filesize as usize, key, &multi_progress)
+            storage::upload_file_multipart(config, path, filesize as usize, key, multi_progress)
                 .await?;
         // Register uploaded file to database
-        add_file_to_dataset(&db_config, dataset_id, &url, filesize, version, metadata).await?;
+        add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
     }
-
-    Ok(())
 }
 
 /// List all files in the given dataset, optionally filtered by prefixes.
@@ -420,6 +438,7 @@ mod tests {
         let url_str =
             "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/src/resources/test.dat";
         let uploaded_files = vec![UploadedFile {
+            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(url_str).unwrap(),

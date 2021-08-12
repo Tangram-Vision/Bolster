@@ -161,6 +161,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 &db_config,
                 device_id,
                 &prefix,
+                utf8_plex_path,
                 utf8_file_paths,
             )
             .await?;

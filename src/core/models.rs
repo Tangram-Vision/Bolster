@@ -50,6 +50,8 @@ pub struct DatasetNoFiles {
 /// A file in a dataset.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct UploadedFile {
+    /// The file's identifier.
+    pub file_id: Uuid,
     /// The parent [Dataset]'s identifier.
     pub dataset_id: Uuid,
 
@@ -163,6 +165,7 @@ mod tests {
         );
         let uf = UploadedFile {
             dataset_id,
+            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(&url_str).unwrap(),
             filesize: 12,
@@ -184,6 +187,7 @@ mod tests {
         );
         let uf = UploadedFile {
             dataset_id,
+            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(&url_str).unwrap(),
             filesize: 12,

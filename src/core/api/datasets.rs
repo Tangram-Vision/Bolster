@@ -333,6 +333,7 @@ pub async fn files_post(
 pub async fn datasets_notify_upload_complete(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
+    plex_file_id: Uuid,
 ) -> Result<()> {
     debug!(
         "Building datasets_notify_upload_complete post request for: {}",
@@ -341,11 +342,12 @@ pub async fn datasets_notify_upload_complete(
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("rpc/dataset_upload_complete");
+    api_url.set_path("rpc/dataset_upload_complete_v2");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
         "dataset_id": dataset_id,
+        "plex_file_id": plex_file_id,
     });
     req_builder = req_builder.json(&req_body);
 
@@ -602,8 +604,8 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .header("Authorization", "Bearer TEST-TOKEN")
-                .body(r#"{"dataset_id":"afd56ecf-9d87-4053-8c80-0d924f06da52"}"#)
-                .path("/rpc/dataset_upload_complete");
+                .body(r#"{"dataset_id":"afd56ecf-9d87-4053-8c80-0d924f06da52","plex_file_id":"bfd56ecf-9d87-4053-8c80-0d924f06da52"}"#)
+                .path("/rpc/dataset_upload_complete_v2");
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
@@ -618,8 +620,9 @@ mod tests {
         )
         .unwrap();
         let dataset_id = Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap();
+        let plex_file_id = Uuid::parse_str("bfd56ecf-9d87-4053-8c80-0d924f06da52").unwrap();
 
-        datasets_notify_upload_complete(&config, dataset_id)
+        datasets_notify_upload_complete(&config, dataset_id, plex_file_id)
             .await
             .unwrap();
 
