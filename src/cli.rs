@@ -367,13 +367,16 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                 .arg(
                     Arg::new("plex_path")
                         .about("Path to .plex file describing device's sensor \
-                                configuration")
+                                configuration.")
                         .required(true)
                         .takes_value(true)
                 )
                 .arg(
                     Arg::new("path")
-                        .about("Path(s) to folder(s) or file(s) to upload")
+                        .about("Path to .bag file (where topic names of data \
+                                streams must match component names in the plex) \
+                                or path(s) to folder(s) containing data (folder \
+                                names must match component names in the plex).")
                         .required(true)
                         .takes_value(true)
                         .multiple(true)
