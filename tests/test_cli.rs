@@ -337,4 +337,42 @@ mod tests {
                 plex_filepath
             )));
     }
+
+    #[test]
+    fn test_cli_errors_if_plex_path_has_dots() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/../src/resources/test.plex");
+        let filepath = Path::new("src/resources/test_full_config.toml");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Paths must not contain './' or '../'.",
+            ));
+    }
+
+    #[test]
+    fn test_cli_errors_if_data_path_has_dots() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let filepath = Path::new("../bolster/src/resources/test_full_config.toml");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Paths must not contain './' or '../'.",
+            ));
+    }
 }

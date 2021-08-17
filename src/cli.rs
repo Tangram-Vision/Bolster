@@ -5,7 +5,7 @@
 use std::{
     fmt::Display,
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     str::FromStr,
 };
 
@@ -84,6 +84,18 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             if !plex_path.is_file() {
                 bail!("Plex file {:?} does not exist or is unreadable", plex_path);
             }
+            // Ensure plex path does not contain . or ..
+            if plex_path
+                .components()
+                .any(|p| p == Component::CurDir || p == Component::ParentDir)
+            {
+                bail!(
+                    "Paths must not contain './' or '../'. (Folder structure is \
+                    preserved in the cloud, so uploading `dir/file` will create \
+                    a file at a different location than doing `cd dir` then \
+                    uploading `file`.)"
+                );
+            }
             let utf8_plex_path = plex_path.to_str().ok_or_else(||
                 anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", plex_path)
             )?.to_owned();
@@ -124,6 +136,21 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .iter()
                 .map(|pathbuf| pathbuf.as_path())
                 .collect();
+
+            // Ensure no paths contain . or ..
+            for path in file_paths.iter() {
+                if path
+                    .components()
+                    .any(|p| p == Component::CurDir || p == Component::ParentDir)
+                {
+                    bail!(
+                        "Paths must not contain './' or '../'. (Folder structure \
+                        is preserved in the cloud, so uploading `dir/file` will \
+                        create a file at a different location than doing `cd dir` \
+                        then uploading `file`.)"
+                    );
+                }
+            }
 
             // Require all paths to be UTF-8 encodable, because S3 requires UTF-8
             // https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
