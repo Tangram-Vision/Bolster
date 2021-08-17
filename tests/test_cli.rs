@@ -133,9 +133,7 @@ mod tests {
     fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let filepath = Path::new("src/resources/test_full_config.toml")
-            .canonicalize()
-            .unwrap();
+        let filepath = Path::new("src/resources/test.bag").canonicalize().unwrap();
         assert!(filepath.is_absolute());
 
         cmd.arg("--config")
@@ -154,7 +152,8 @@ mod tests {
     fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        // path is '255'.bag
+        let pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 98, 97, 103]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
@@ -173,7 +172,8 @@ mod tests {
     fn test_cli_upload_disallows_non_utf8_plex_path() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let filepath = Path::new("src/resources/test.plex");
-        let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        // path is '255'.plex
+        let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 112, 108, 101, 120]));
         std::fs::write(plex_pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
@@ -193,7 +193,7 @@ mod tests {
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let filepath = Path::new("src/resources/test_full_config.toml");
+        let filepath = Path::new("src/resources/test.bag");
         assert!(filepath.is_relative());
 
         cmd.arg("--config")
@@ -315,14 +315,16 @@ mod tests {
             .arg("non-existent-file")
             .assert()
             .failure()
-            .stderr(predicate::str::contains("is not a directory or a file"));
+            .stderr(predicate::str::contains(
+                r#"Data file ("non-existent-file") does not exist or is unreadable"#,
+            ));
     }
 
     #[test]
     fn test_cli_plex_file_must_exist() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/non-existent.plex");
-        let filepath = Path::new("src/resources/test_full_config.toml");
+        let filepath = Path::new("src/resources/test.bag");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
@@ -333,7 +335,7 @@ mod tests {
             .assert()
             .failure()
             .stderr(predicate::str::contains(format!(
-                "Plex file {:?} does not exist or is unreadable",
+                "Plex file ({:?}) does not exist or is unreadable",
                 plex_filepath
             )));
     }
@@ -342,7 +344,7 @@ mod tests {
     fn test_cli_errors_if_plex_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/../src/resources/test.plex");
-        let filepath = Path::new("src/resources/test_full_config.toml");
+        let filepath = Path::new("src/resources/test.bag");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
@@ -361,7 +363,7 @@ mod tests {
     fn test_cli_errors_if_data_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let filepath = Path::new("../bolster/src/resources/test_full_config.toml");
+        let filepath = Path::new("../bolster/src/resources/test.bag");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")

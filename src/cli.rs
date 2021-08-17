@@ -3,6 +3,7 @@
 //! For overall architecture, see [ARCHITECTURE.md](https://gitlab.com/tangram-vision-oss/bolster/-/blob/main/ARCHITECTURE.md)
 
 use std::{
+    ffi::OsStr,
     fmt::Display,
     io::{self, Write},
     path::{Component, Path, PathBuf},
@@ -45,6 +46,133 @@ where
     }
 }
 
+/// Different kinds of paths that bolster expects as arguments
+#[derive(Debug)]
+pub enum PathKind {
+    /// Plex (associated path should point to a .plex file)
+    Plex,
+    /// Object-space CSV (associated path should point to a .csv file)
+    ObjectSpaceCsv,
+    /// Data (associated path(s) should point to a .bag file or folders)
+    Data,
+}
+
+impl PathKind {
+    /// Validates that the given path matches expectations for the PathKind
+    ///
+    /// # Errors
+    ///
+    /// - For [PathKind::Plex], an error is raised if the path doesn't end in
+    /// `.plex` or if the path points to a non-existent or unreadable file.
+    /// - For [PathKind::ObjectSpaceCsv], an error is raised if the path doesn't
+    /// end in `.csv` or if the path points to a non-existent or unreadable file.
+    /// - For [PathKind::Data], an error is raised if the path points to a file
+    /// but the file doesn't end in `.bag`, or if the path points to an
+    /// unreadable file or directory, or if the path points to a non-existent
+    /// file/folder.
+    pub fn validate(self, path: &Path) -> Result<()> {
+        match self {
+            PathKind::Plex => {
+                if path
+                    .extension()
+                    .unwrap_or_else(|| OsStr::new(""))
+                    .to_ascii_lowercase()
+                    != "plex"
+                {
+                    bail!("Plex file ({:?}) doesn't end in .plex", path);
+                }
+                if !path.is_file() {
+                    bail!("Plex file ({:?}) does not exist or is unreadable", path);
+                }
+                Ok(())
+            }
+            PathKind::ObjectSpaceCsv => {
+                if path
+                    .extension()
+                    .unwrap_or_else(|| OsStr::new(""))
+                    .to_ascii_lowercase()
+                    != "csv"
+                {
+                    bail!("Object-space CSV file ({:?}) doesn't end in .csv", path);
+                }
+                if !path.is_file() {
+                    bail!(
+                        "Object-space CSV file ({:?}) does not exist or is unreadable",
+                        path
+                    );
+                }
+                Ok(())
+            }
+            PathKind::Data => {
+                if path.is_file() {
+                    if path
+                        .extension()
+                        .unwrap_or_else(|| OsStr::new(""))
+                        .to_ascii_lowercase()
+                        != "bag"
+                    {
+                        bail!(
+                            "Data file ({:?}) doesn't end in .bag. Data input \
+                            must be .bag files or folders.",
+                            path
+                        );
+                    }
+                } else if path.is_dir() {
+                    // Maybe eventually we'll parse the plex and ensure the
+                    // folder names match.
+                } else {
+                    bail!("Data file ({:?}) does not exist or is unreadable", path);
+                }
+                Ok(())
+            }
+        }
+    }
+}
+
+/// Ensures paths are relative, free of ./.., utf-8, existing, and with the correct extension.
+///
+/// # Errors
+///
+/// Returns an error if any provided paths (i.e. for the plex, csv, or data paths):
+/// - Are absolute
+/// - Contain `.` (current directory) or `..` (parent directory)
+/// - Are not valid UTF-8
+/// - Do not exist (plex and csv arguments must point to a file, data arguments
+/// must point to a file or folder)
+/// - Have the wrong extension (the plex argument must be a file ending with
+/// .plex, the object space csv argument must be a file ending with .csv)
+pub fn clean_and_validate_path(path_os_str: &OsStr, path_kind: PathKind) -> Result<String> {
+    let path = Path::new(path_os_str);
+    path_kind.validate(path)?;
+    // Ensure plex path does not contain . or ..
+    if path
+        .components()
+        .any(|p| p == Component::CurDir || p == Component::ParentDir)
+    {
+        bail!(
+            "Paths must not contain './' or '../'. (Folder structure is \
+            preserved in the cloud, so uploading `dir/file` will create \
+            a file at a different location than doing `cd dir` then \
+            uploading `file`.)"
+        );
+    }
+    if path.is_absolute() {
+        bail!(
+            "File/folder paths must be relative! (Folder structure is \
+            preserved in the cloud, so uploading `dir/file` will create \
+            a file at a different location than doing `cd dir` then \
+            uploading `file`.)"
+        );
+    }
+    // Require all paths to be UTF-8 encodable, because S3 requires UTF-8
+    // https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
+    let utf8_path = path.to_str().ok_or_else(||
+        anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", path)
+    )?.to_owned();
+
+    Ok(utf8_path)
+}
+
 /// Process provided CLI subcommands and options.
 ///
 /// # Errors
@@ -80,42 +208,22 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let prefix = db.user_id_from_jwt()?.to_string();
 
             let device_id: String = upload_matches.value_of_t_or_exit::<String>("device_id");
-            let plex_path: &Path = Path::new(upload_matches.value_of_os("plex_path").unwrap());
-            if !plex_path.is_file() {
-                bail!("Plex file {:?} does not exist or is unreadable", plex_path);
-            }
-            // Ensure plex path does not contain . or ..
-            if plex_path
-                .components()
-                .any(|p| p == Component::CurDir || p == Component::ParentDir)
-            {
-                bail!(
-                    "Paths must not contain './' or '../'. (Folder structure is \
-                    preserved in the cloud, so uploading `dir/file` will create \
-                    a file at a different location than doing `cd dir` then \
-                    uploading `file`.)"
-                );
-            }
-            let utf8_plex_path = plex_path.to_str().ok_or_else(||
-                anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", plex_path)
-            )?.to_owned();
+            let plex_path = upload_matches.value_of_os("plex_path").unwrap();
+            let utf8_plex_path = clean_and_validate_path(plex_path, PathKind::Plex)?;
 
-            let mut file_paths: Vec<&Path> = upload_matches
-                .values_of_os("path")
-                .unwrap()
-                .map(|os_str| Path::new(os_str))
-                .collect::<Vec<&Path>>();
-            if file_paths.iter().any(|&path| path.is_absolute()) {
-                bail!(
-                    "File/folder paths must be relative! (Folder structure is \
-                    preserved in the cloud, so uploading `dir/file` will create \
-                    a file at a different location than doing `cd dir` then \
-                    uploading `file`.)"
-                );
-            }
-            let file_pathbufs = file_paths.iter_mut().try_fold(
-                Vec::new(),
-                |mut acc, path| -> Result<Vec<PathBuf>> {
+            // TODO: add csv arg
+
+            let file_paths: Vec<&OsStr> = upload_matches.values_of_os("path").unwrap().collect();
+            let mut utf8_file_paths: Vec<String> = file_paths
+                .iter()
+                .map(|os_str| clean_and_validate_path(os_str, PathKind::Data))
+                .collect::<Result<Vec<String>>>()?;
+
+            // Collect utf8 paths to all files in any provided data folders (including subfolders)
+            let all_utf8_file_paths: Vec<String> = utf8_file_paths
+                .iter_mut()
+                .try_fold(Vec::new(), |mut acc, utf8_path| -> Result<Vec<PathBuf>> {
+                    let path = Path::new(utf8_path);
                     let file_list: Result<Vec<PathBuf>> = match path {
                         // WalkDir does not follow symlinks by default
                         path if path.is_dir() => Ok(WalkDir::new(path)
@@ -130,49 +238,32 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     let mut file_list = file_list?;
                     acc.append(&mut file_list);
                     Ok(acc)
-                },
-            )?;
-            let file_paths: Vec<&Path> = file_pathbufs
+                })?
                 .iter()
-                .map(|pathbuf| pathbuf.as_path())
-                .collect();
+                .map(|pathbuf| Ok(pathbuf.as_path().to_str().ok_or_else(||
+                    anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", pathbuf)
+                )?.to_owned()))
+                .collect::<Result<Vec<String>>>()?;
 
-            // Ensure no paths contain . or ..
-            for path in file_paths.iter() {
-                if path
-                    .components()
-                    .any(|p| p == Component::CurDir || p == Component::ParentDir)
-                {
-                    bail!(
-                        "Paths must not contain './' or '../'. (Folder structure \
-                        is preserved in the cloud, so uploading `dir/file` will \
-                        create a file at a different location than doing `cd dir` \
-                        then uploading `file`.)"
-                    );
-                }
-            }
-
-            // Require all paths to be UTF-8 encodable, because S3 requires UTF-8
-            // https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html
-            let utf8_file_paths = file_paths
-                .into_iter()
-                .map(|path| path.to_str().ok_or_else( ||
-                    anyhow!("All file/folder names must be valid UTF-8 (AWS S3 requirement). Invalid UTF-8: {:?}", path)
-                ))
-                .collect::<Result<Vec<&str>>>()?
-                .into_iter()
-                .map(|path_str| path_str.to_owned())
-                .collect::<Vec<String>>();
+            // TODO: If >1000 files are provided, exit with error and request
+            // user to tar/zip files first.
 
             let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {
-                println!("Creating a dataset of {} file(s)", utf8_file_paths.len());
+                println!(
+                    "Creating a dataset of {} file(s)",
+                    all_utf8_file_paths.len()
+                );
             } else {
                 println!(
                     "This command will create a dataset with a plex and {} data file(s):",
-                    utf8_file_paths.len()
+                    all_utf8_file_paths.len()
                 );
-                println!("\t{}\n\t{}", utf8_plex_path, utf8_file_paths.join("\n\t"));
+                println!(
+                    "\t{}\n\t{}",
+                    utf8_plex_path,
+                    all_utf8_file_paths.join("\n\t")
+                );
                 print!("Continue? [y/n] ");
                 io::stdout().flush()?;
 
@@ -189,7 +280,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 device_id,
                 &prefix,
                 utf8_plex_path,
-                utf8_file_paths,
+                all_utf8_file_paths,
             )
             .await?;
         }
@@ -493,6 +584,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
 
 #[cfg(test)]
 mod tests {
+    use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+
     use super::*;
 
     #[test]
@@ -508,6 +601,96 @@ mod tests {
         let error = cli_match(config, clap::ArgMatches::default())
             .expect_err("Expected error due to missing database jwt");
         assert_eq!(error.to_string(), "missing field `jwt`");
+    }
+
+    #[test]
+    fn test_plex_pathkind_validation_good() {
+        let path = Path::new("src/resources/test.plex");
+        PathKind::Plex.validate(path).unwrap();
+    }
+
+    #[test]
+    fn test_plex_pathkind_validation_bad_extension() {
+        let path = Path::new("src/resources/test_full_config.toml");
+        PathKind::Plex.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_plex_pathkind_validation_nonexistent() {
+        let path = Path::new("non-existent.plex");
+        PathKind::Plex.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_csv_pathkind_validation_good() {
+        let path = Path::new("src/resources/test.csv");
+        PathKind::ObjectSpaceCsv.validate(path).unwrap();
+    }
+
+    #[test]
+    fn test_csv_pathkind_validation_bad_extension() {
+        let path = Path::new("src/resources/test_full_config.toml");
+        PathKind::ObjectSpaceCsv.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_csv_pathkind_validation_nonexistent() {
+        let path = Path::new("non-existent.csv");
+        PathKind::ObjectSpaceCsv.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_data_pathkind_validation_good_bag() {
+        let path = Path::new("src/resources/test.bag");
+        PathKind::Data.validate(path).unwrap();
+    }
+
+    #[test]
+    fn test_data_pathkind_validation_good_folder() {
+        let path = Path::new("src/resources");
+        PathKind::Data.validate(path).unwrap();
+    }
+
+    #[test]
+    fn test_data_pathkind_validation_bad_extension() {
+        let path = Path::new("src/resources/test_full_config.toml");
+        PathKind::Data.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_data_pathkind_validation_nonexistent() {
+        let path = Path::new("non-existent.bag");
+        PathKind::Data.validate(path).unwrap_err();
+    }
+
+    #[test]
+    fn test_clean_and_validate_success() {
+        let path = OsStr::new("src/resources/test.plex");
+        clean_and_validate_path(path, PathKind::Plex).unwrap();
+    }
+
+    #[test]
+    fn test_clean_and_validate_disallow_dots() {
+        let path = OsStr::new("src/../src/resources/test.plex");
+        clean_and_validate_path(path, PathKind::Plex).unwrap_err();
+    }
+
+    #[test]
+    fn test_clean_and_validate_disallow_absolute_path() {
+        let path = Path::new("src/resources/test.plex")
+            .canonicalize()
+            .unwrap()
+            .into_os_string();
+        clean_and_validate_path(&path, PathKind::Plex).unwrap_err();
+    }
+
+    #[test]
+    fn test_clean_and_validate_disallow_non_utf8() {
+        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
+
+        let path = pathbuf.as_os_str();
+        clean_and_validate_path(path, PathKind::Plex).unwrap_err();
     }
 
     // Other CLI-related tests are in tests/test_cli.rs and act as integration
