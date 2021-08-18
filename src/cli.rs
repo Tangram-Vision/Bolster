@@ -494,7 +494,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .about("Automatic yes to prompt that lists files to upload")
                         .short('y')
                         .long("yes")
-                        .takes_value(true)
                 )
                 .arg(
                     Arg::new("provider")
