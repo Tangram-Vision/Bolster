@@ -211,7 +211,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let plex_path = upload_matches.value_of_os("plex_path").unwrap();
             let utf8_plex_path = clean_and_validate_path(plex_path, PathKind::Plex)?;
 
-            // TODO: add csv arg
+            let csv_path = upload_matches.value_of_os("object_space_csv_path").unwrap();
+            let utf8_csv_path = clean_and_validate_path(csv_path, PathKind::ObjectSpaceCsv)?;
 
             let file_paths: Vec<&OsStr> = upload_matches.values_of_os("path").unwrap().collect();
             let mut utf8_file_paths: Vec<String> = file_paths
@@ -220,7 +221,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .collect::<Result<Vec<String>>>()?;
 
             // Collect utf8 paths to all files in any provided data folders (including subfolders)
-            let all_utf8_file_paths: Vec<String> = utf8_file_paths
+            let mut all_utf8_file_paths: Vec<String> = utf8_file_paths
                 .iter_mut()
                 .try_fold(Vec::new(), |mut acc, utf8_path| -> Result<Vec<PathBuf>> {
                     let path = Path::new(utf8_path);
@@ -245,6 +246,12 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 )?.to_owned()))
                 .collect::<Result<Vec<String>>>()?;
 
+            // Add the CSV path in with all the data paths. We don't track the
+            // CSV separately (as we do the plex) because we don't anticipate
+            // querying by CSV or tracking different categories of CSVs as we do
+            // with plexes (e.g.  calibrated vs uncalibrated).
+            all_utf8_file_paths.insert(0, utf8_csv_path);
+
             // TODO: If >1000 files are provided, exit with error and request
             // user to tar/zip files first.
 
@@ -256,7 +263,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 );
             } else {
                 println!(
-                    "This command will create a dataset with a plex and {} data file(s):",
+                    "This command will create a dataset with a plex, a csv, and {} data file(s):",
                     all_utf8_file_paths.len()
                 );
                 println!(
@@ -459,6 +466,12 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                     Arg::new("plex_path")
                         .about("Path to .plex file describing device's sensor \
                                 configuration.")
+                        .required(true)
+                        .takes_value(true)
+                )
+                .arg(
+                    Arg::new("object_space_csv_path")
+                        .about("Path to .csv file describing object space.")
                         .required(true)
                         .takes_value(true)
                 )
