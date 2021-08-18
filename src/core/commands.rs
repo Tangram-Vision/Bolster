@@ -300,7 +300,7 @@ pub async fn download_files(
                 .iter()
                 .zip(iter::repeat_with(|| storage_config.clone()))
                 .map(|(uploaded_file, local_storage_config)| {
-                    download_file(local_storage_config, &uploaded_file, &multi_progress)
+                    download_file(local_storage_config, uploaded_file, &multi_progress)
                 }),
         )
         .buffer_unordered(MAX_FILES_DOWNLOADING_CONCURRENTLY);
