@@ -446,7 +446,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             Arg::new("config")
                 .short('c')
                 .long("config")
-                .value_name("file")
+                .value_name("FILE")
                 .about("Set a custom config file")
                 .takes_value(true),
         )
@@ -459,6 +459,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                                 device/robot/installation that produced the \
                                 dataset. Useful for filtering datasets and \
                                 results.")
+                        .value_name("DEVICE_ID")
                         .required(true)
                         .takes_value(true)
                 )
@@ -466,12 +467,14 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                     Arg::new("plex_path")
                         .about("Path to .plex file describing device's sensor \
                                 configuration.")
+                        .value_name("PLEX_PATH")
                         .required(true)
                         .takes_value(true)
                 )
                 .arg(
                     Arg::new("object_space_csv_path")
                         .about("Path to .csv file describing object space.")
+                        .value_name("OBJECT_SPACE_CSV_PATH")
                         .required(true)
                         .takes_value(true)
                 )
@@ -481,6 +484,7 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                                 streams must match component names in the plex) \
                                 or path(s) to folder(s) containing data (folder \
                                 names must match component names in the plex).")
+                        .value_name("PATH")
                         .required(true)
                         .takes_value(true)
                         .multiple(true)
@@ -583,8 +587,17 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
         .subcommand(
             App::new("download")
                 .about("Download files in remote dataset")
-                .arg(Arg::new("dataset_uuid").required(true).takes_value(true))
-                .arg(Arg::new("prefix").about("All files with names starting with a prefix will be downloaded").takes_value(true).multiple(true))
+                .args(&[
+                    Arg::new("dataset_uuid")
+                        .value_name("DATASET_UUID")
+                        .required(true)
+                        .takes_value(true),
+                    Arg::new("prefix")
+                        .value_name("PREFIX")
+                        .about("All files with names starting with a prefix will be downloaded")
+                        .takes_value(true)
+                        .multiple(true)
+                ])
             // TODO: Add path to download files to?
         )
         .subcommand(App::new("config").about("Show Configuration"));
