@@ -207,7 +207,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let storage_config = storage::StorageConfig::new(config, provider)?;
             let prefix = db.user_id_from_jwt()?.to_string();
 
-            let device_id: String = upload_matches.value_of_t_or_exit::<String>("device_id");
+            let system_id: String = upload_matches.value_of_t_or_exit::<String>("system_id");
             let plex_path = upload_matches.value_of_os("plex_path").unwrap();
             let utf8_plex_path = clean_and_validate_path(plex_path, PathKind::Plex)?;
 
@@ -284,7 +284,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             commands::create_and_upload_dataset(
                 storage_config,
                 &db_config,
-                device_id,
+                system_id,
                 &prefix,
                 utf8_plex_path,
                 all_utf8_file_paths,
@@ -318,7 +318,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
-            let device_id: Option<String> = handle_optional_arg(ls_matches, "device_id");
+            let system_id: Option<String> = handle_optional_arg(ls_matches, "system_id");
             let limit: Option<usize> = handle_optional_arg(ls_matches, "limit");
             let offset: Option<usize> = handle_optional_arg(ls_matches, "offset");
 
@@ -326,7 +326,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             let get_params = DatasetGetRequest {
                 dataset_id,
-                device_id,
+                system_id,
                 before_date,
                 after_date,
                 order,
@@ -362,13 +362,13 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 else {
                     println!(
                         "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
-                        "UUID", "Device ID", "Created Datetime", "# Files", "Filesize",
+                        "UUID", "System ID", "Created Datetime", "# Files", "Filesize",
                     );
                     for d in datasets {
                         println!(
                             "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
                             d.dataset_id.to_string(),
-                            d.device_id,
+                            d.system_id,
                             d.created_date.format("%Y-%m-%d %H:%M:%S UTC"),
                             d.files.len(),
                             Byte::from_bytes(
@@ -454,18 +454,18 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
             App::new("upload")
                 .about("Upload files, creating a new remote dataset")
                 .arg(
-                    Arg::new("device_id")
+                    Arg::new("system_id")
                         .about("String that identifies the \
-                                device/robot/installation that produced the \
-                                dataset. Useful for filtering datasets and \
+                                system/device/robot/installation that produced \
+                                the dataset. Useful for filtering datasets and \
                                 results.")
-                        .value_name("DEVICE_ID")
+                        .value_name("SYSTEM_ID")
                         .required(true)
                         .takes_value(true)
                 )
                 .arg(
                     Arg::new("plex_path")
-                        .about("Path to .plex file describing device's sensor \
+                        .about("Path to .plex file describing system's sensor \
                                 configuration.")
                         .value_name("PLEX_PATH")
                         .required(true)
@@ -539,11 +539,11 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .long("uuid")
                         .value_name("UUID")
                         .takes_value(true),
-                    Arg::new("device_id")
-                        .about("Show datasets from specified device")
+                    Arg::new("system_id")
+                        .about("Show datasets from specified system")
                         .short('d')
-                        .long("device-id")
-                        .value_name("DEVICE_ID")
+                        .long("system-id")
+                        .value_name("SYSTEM_ID")
                         .takes_value(true),
                     Arg::new("order")
                         .about("Sort results by field")

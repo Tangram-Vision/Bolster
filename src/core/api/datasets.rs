@@ -80,8 +80,8 @@ impl DatasetOrdering {
 pub struct DatasetGetRequest {
     /// Filter to a specific dataset
     pub dataset_id: Option<Uuid>,
-    /// Filter to a specific device/robot/installation
-    pub device_id: Option<String>,
+    /// Filter to a specific system/device/robot/installation
+    pub system_id: Option<String>,
     /// Filter to datasets before a date
     pub before_date: Option<NaiveDate>,
     /// Filter to datasets after a date
@@ -106,7 +106,7 @@ impl Default for DatasetGetRequest {
     fn default() -> Self {
         Self {
             dataset_id: None,
-            device_id: None,
+            system_id: None,
             before_date: None,
             after_date: None,
             order: None,
@@ -138,8 +138,8 @@ pub async fn datasets_get(
     if let Some(dataset_id) = &params.dataset_id {
         req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
     }
-    if let Some(device_id) = &params.device_id {
-        req_builder = req_builder.query(&[("device_id", format!("eq.{}", device_id))]);
+    if let Some(system_id) = &params.system_id {
+        req_builder = req_builder.query(&[("system_id", format!("eq.{}", system_id))]);
     }
     if let Some(before_date) = &params.before_date {
         req_builder = req_builder.query(&[("created_date", format!("lt.{}", before_date))]);
@@ -186,10 +186,10 @@ pub async fn datasets_get(
 /// data is malformed (e.g. not json).
 pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
-    device_id: String,
+    system_id: String,
     metadata: serde_json::Value,
 ) -> Result<DatasetNoFiles> {
-    debug!("Building post request for: {} {:?}", device_id, metadata);
+    debug!("Building post request for: {} {:?}", system_id, metadata);
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
@@ -197,7 +197,7 @@ pub async fn datasets_post(
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
-        "device_id": device_id,
+        "system_id": system_id,
         "metadata": metadata,
     });
     req_builder = req_builder.json(&req_body);
@@ -385,7 +385,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },
@@ -427,7 +427,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },

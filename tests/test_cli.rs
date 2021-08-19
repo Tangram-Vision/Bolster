@@ -108,7 +108,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },

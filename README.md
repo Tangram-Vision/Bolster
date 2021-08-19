@@ -46,9 +46,9 @@ Echoes current config (with any overrides applied) and exits.
 
 ---
 
-```bolster upload <device_id> <path>...```
+```bolster upload <system_id> <path>...```
 
-Creates a new dataset associated with the device ID and uploads all
+Creates a new dataset associated with the system ID and uploads all
 files in the provided path(s). If any path is a directory, all files in the
 directory will be uploaded. Folder structure is preserved when uploading to
 cloud storage. Does not follow symlinks.
@@ -57,12 +57,12 @@ Uploading files creates a new dataset and outputs the created dataset's
 UUID, which can be used to download or query the dataset or the files it
 contains in the future.
 
-The `<device_id>` provided when uploading a dataset should match however
-you identify your devices/robots/installations, whether that be by an
+The `<system_id>` provided when uploading a dataset should match however
+you identify your systems/robots/installations, whether that be by an
 integer (e.g. "unit 1") or a serial (e.g. "A12") or a build date (e.g.
 "12-MAY-2021") or a location (e.g. "field3" or "southwest-corner") or
-anything else. The dataset will be associated with the given device_id, to
-allow filtering datasets (and processing results) by device.
+anything else. The dataset will be associated with the given system_id, to
+allow filtering datasets (and processing results) by system.
 
 Note: Only files up to 4.88 TB may be uploaded.
 
@@ -110,15 +110,15 @@ image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls.png)
 # bolster upload
 ###############
 
-# Uploads myfile1 as a new dataset for the "robot-1" device.
+# Uploads myfile1 as a new dataset for the "robot-1" system.
 bolster upload robot-1 myfile1
 
 # Uploads myfile1, myfile2, and myfile3 as a new dataset for the "drone-A12"
-# device.
+# system.
 bolster upload drone-A12 myfile1 myfile2 myfile3
 
 # Uploads all files in myfolder1 and myfile4 as a new dataset for "johnny-5"
-# device.
+# system.
 bolster upload johnny-5 myfolder1 myfolder2/myfile4
 
 ###############
