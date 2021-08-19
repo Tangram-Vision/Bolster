@@ -1,5 +1,3 @@
-# bolster
-
 Bolster is a Command Line Interface (CLI) from Tangram Vision for managing
 sensor datasets and results of processing them.
 
@@ -8,7 +6,7 @@ datasets will trigger processing in the cloud using our computer vision
 algorithms. Processed results will be delivered via email and will also be
 available for download via bolster.
 
-## Installation
+# Installation
 
 If you have [Rust installed](https://rustup.rs/), you can install bolster
 with:
@@ -20,14 +18,14 @@ cargo install --branch=main --git=https://gitlab.com/tangram-vision-oss/bolster.
 Alternatively, release binaries are published for supported platforms at
 <https://gitlab.com/tangram-vision-oss/bolster/-/releases/>.
 
-## Usage
+# Usage
 
 View CLI help with `bolster help` or `bolster help <subcommand>`.
 
 Bolster is intended to be used as a binary -- if you want to use it as a
 library, [talk to us about your use case](https://tangram-vision.canny.io)!
 
-### Configuration
+## Configuration
 
 Bolster requires a configuration file to successfully interact with web
 services. A configuration file is provided to you when you join the Alpha
@@ -36,7 +34,7 @@ program. To use the configuration file with bolster, either:
 - Place the configuration file at `~/.config/tangram_vision/bolster.toml`
 - Use the `--config path/to/bolster.toml` flag
 
-### Commands
+## Commands
 
 ```bolster config```
 
@@ -103,7 +101,7 @@ listed.
 ![Bolster ls example
 image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls.png)
 
-### Examples
+## Examples
 
 ```shell
 ###############
@@ -152,7 +150,7 @@ bolster ls --uuid=1415fe36-851f-4c62-a616-4f5e343ba5fc
 bolster ls --after-date 2021-01-01 --order-by=created_date.desc
 ```
 
-## Troubleshooting
+# Troubleshooting
 
 If you're encountering issues using bolster, please refer to the table below
 for potential solutions. If the issue persists, please [let us
@@ -165,7 +163,7 @@ know](https://tangram-vision.canny.io).
 | All file/folder names must be valid UTF-8 | All filepaths uploaded as a dataset must be valid UTF-8 as required by S3-compatible cloud storage providers.                                                                                                                                                   |
 | File/folder paths must be relative        | You may not use absolute filepaths with the upload sub-command, such as `/dir/file` or `~/dir/file`, because bolster preserves the folder structure of uploaded files.                                                                                          |
 
-## Security
+# Security
 
 Bolster connects to web services using TLS (data is encrypted in transit).
 Datasets stored with cloud storage providers are encrypted at rest. All
@@ -181,7 +179,7 @@ steps in handling your report. After the initial reply to your report, we
 will endeavor to keep you informed of the progress towards a fix and full
 announcement, and may ask for additional information or guidance.
 
-## Performance
+# Performance
 
 Bolster currently uploads up to 4 files in parallel with each file uploading
 up to 10 separate 16-MB chunks at a time. So, bolster may use up to 640 MB
@@ -191,7 +189,7 @@ environment, please [let us know](https://tangram-vision.canny.io).
 All uploaded files are md5-checksummed for data integrity. As a result, you
 may notice some CPU load while uploading.
 
-## Feedback
+# Feedback
 
 As always, if you have any feedback, please [let us
 know](https://tangram-vision.canny.io/)!
