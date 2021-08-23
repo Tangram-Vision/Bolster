@@ -393,4 +393,25 @@ mod tests {
                 "Paths must not contain './' or '../'.",
             ));
     }
+
+    #[test]
+    fn test_cli_errors_if_uploading_too_many_files() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("target");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Please tar/zip the files before uploading!",
+            ));
+    }
 }

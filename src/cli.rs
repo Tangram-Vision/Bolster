@@ -30,6 +30,9 @@ use crate::{
     },
 };
 
+/// If trying to upload more files, exit and prompt to tar/zip files.
+const UPLOAD_MAX_FILES_ALLOWED: usize = 200;
+
 /// Extract optional arg with a specific type, exiting on parse error.
 pub fn handle_optional_arg<T>(matches: &clap::ArgMatches, arg_name: &str) -> Option<T>
 where
@@ -246,14 +249,15 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 )?.to_owned()))
                 .collect::<Result<Vec<String>>>()?;
 
+            if all_utf8_file_paths.len() > UPLOAD_MAX_FILES_ALLOWED {
+                bail!("You're trying to upload {} files (max = {}). Please tar/zip the files before uploading!", all_utf8_file_paths.len(), UPLOAD_MAX_FILES_ALLOWED);
+            }
+
             // Add the CSV path in with all the data paths. We don't track the
             // CSV separately (as we do the plex) because we don't anticipate
             // querying by CSV or tracking different categories of CSVs as we do
             // with plexes (e.g.  calibrated vs uncalibrated).
             all_utf8_file_paths.insert(0, utf8_csv_path);
-
-            // TODO: If >1000 files are provided, exit with error and request
-            // user to tar/zip files first.
 
             let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {
