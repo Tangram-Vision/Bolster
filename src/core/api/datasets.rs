@@ -4,10 +4,10 @@
 
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use chrono::NaiveDate;
 use log::debug;
-use reqwest::{header, Url};
+use reqwest::{header, Response, StatusCode, Url};
 use serde_json::json;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
@@ -116,6 +116,59 @@ impl Default for DatasetGetRequest {
     }
 }
 
+/// Responses with any of these [StatusCode]s show extra detail.
+const ERROR_STATUSES_TO_SHOW_DETAIL: [StatusCode; 3] = [
+    StatusCode::BAD_REQUEST,
+    StatusCode::UNAUTHORIZED,
+    StatusCode::FORBIDDEN,
+];
+
+/// Returns response json or an error with extra context/detail.
+///
+/// For responses with a status code in [ERROR_STATUSES_TO_SHOW_DETAIL], return
+/// an error message that includes contents of "message", "detail", and "hint"
+/// fields in the API response, if they're provided. This will be used to inform
+/// users if they're providing bad input to the API or if a particular API
+/// endpoint is disabled/retired (and the user should upgrade to a newer version
+/// of bolster).
+pub async fn check_response(response: Response) -> Result<serde_json::Value> {
+    let status = response.status();
+    debug!("check_response status: {}", status);
+    let status_maybe_err = response.error_for_status_ref();
+    if status_maybe_err.is_ok() {
+        let content = response
+            .json()
+            .await
+            .with_context(|| "JSON from API was malformed.");
+        debug!("check_response content: {:?}", content);
+        let content = content?;
+        return Ok(content);
+    }
+
+    let status_err = status_maybe_err.unwrap_err();
+    if status_err.status().is_some()
+        && ERROR_STATUSES_TO_SHOW_DETAIL.contains(&status_err.status().unwrap())
+    {
+        response.json::<serde_json::Value>().await.map(|js| {
+            // Build up error to show user from error message and any message,
+            // detail, and hint fields that are populated.
+            let mut err_msg = format!("{}", status_err);
+            if let Some(Some(msg)) = js.get("message").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tMessage: {}", msg))
+            }
+            if let Some(Some(detail)) = js.get("detail").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tDetail: {}", detail))
+            }
+            if let Some(Some(hint)) = js.get("hint").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tHint: {}", hint))
+            }
+            bail!(err_msg);
+        })?
+    } else {
+        Err(Error::new(status_err))
+    }
+}
+
 /// Get a list of datasets and their files.
 ///
 /// # Errors
@@ -163,14 +216,13 @@ pub async fn datasets_get(
     }
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let datasets: Vec<Dataset> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
+    let datasets: Vec<Dataset> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Datasets API was malformed: {}", content))?;
     Ok(datasets)
 }
 
@@ -203,14 +255,13 @@ pub async fn datasets_post(
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
+    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Datasets API was malformed: {}", content))?;
     // PostgREST resturns a list, even when only a single object is expected
     // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
     datasets
@@ -264,14 +315,13 @@ pub async fn files_get(
     };
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let files: Vec<UploadedFile> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    let files: Vec<UploadedFile> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Files API was malformed: {}", content))?;
     Ok(files)
 }
 
@@ -307,16 +357,15 @@ pub async fn files_post(
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
     // TODO: Add context to 409 response (dataset doesn't exist) OR validate it
     // does before uploading to storage provider.
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("response content: {}", content);
 
-    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Files API was malformed: {}", content))?;
     uploaded_files
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for updated File!"))
@@ -352,10 +401,9 @@ pub async fn datasets_notify_upload_complete(
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
     Ok(())
@@ -371,6 +419,201 @@ mod tests {
     };
 
     use super::*;
+
+    #[tokio::test]
+    async fn test_check_response_200() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        check_response(response)
+            .await
+            .expect("200 response should be Ok");
+
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn test_check_response_400_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(400)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("400 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_400_message_only() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(400)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": null,
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("400 response should be Err");
+
+        mock.assert();
+        println!("{}", error);
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Hint"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_401_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(401)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("401 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_403_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(403)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("403 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_500_has_no_detail() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(500)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("500 response should be Err");
+
+        mock.assert();
+        assert!(!format!("{}", error).contains("Message"));
+        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Hint"));
+    }
 
     #[tokio::test]
     async fn test_datasets_get_success() {
@@ -500,6 +743,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_datasets_get_malformed_json() {
+        // let _ = env_logger::try_init();
+
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -521,17 +766,18 @@ mod tests {
         let result = datasets_get(&config, &params)
             .await
             .expect_err("Expected json parsing error");
-        let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
+        println!("result: {:?}", result);
+        let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
-        assert_eq!(downcast.classify(), serde_json::error::Category::Syntax);
-        assert!(result
-            .to_string()
-            .contains("JSON from Datasets API was malformed: this isn't actually json"));
+        assert!(downcast.is_decode());
+        assert!(result.to_string().contains("JSON from API was malformed"));
     }
 
     #[tokio::test]
     async fn test_datasets_get_401_response() {
+        // let _ = env_logger::try_init();
+
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -553,13 +799,8 @@ mod tests {
         let result = datasets_get(&config, &params)
             .await
             .expect_err("Expected status code error");
-        let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
-        assert_eq!(
-            downcast.status().unwrap(),
-            reqwest::StatusCode::UNAUTHORIZED
-        );
         assert!(result
             .to_string()
             .contains("HTTP status client error (401 Unauthorized) for url"));
