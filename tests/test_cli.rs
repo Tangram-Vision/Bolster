@@ -93,10 +93,6 @@ mod tests {
 
     #[test]
     fn test_cli_no_files_in_dataset() {
-        // To debug what rusoto and httpmock are doing, enable logger and run
-        // tests with debug or trace level.
-        // let _ = env_logger::try_init();
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)

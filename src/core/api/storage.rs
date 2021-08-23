@@ -678,10 +678,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_download_file_403_forbidden() {
-        // To debug what rusoto and httpmock are doing, enable logger and run
-        // tests with debug or trace level.
-        // let _ = env_logger::try_init();
-
         let bucket = "tangram-test".to_owned();
         let key = "test-file";
         let server = MockServer::start();
@@ -785,7 +781,6 @@ mod tests {
         // I switched read_file_chunks from unfold to try_unfold, so now the
         // stream should exit early with an error if it encounters one, rather
         // than continuing to read the rest of the file.
-        let _ = env_logger::try_init();
 
         let reader = Builder::new()
             .read_error(std::io::Error::new(
@@ -842,8 +837,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_completed_part_success() {
-        let _ = env_logger::try_init();
-
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::default()
@@ -873,8 +866,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_completed_part_missing_etag() {
-        let _ = env_logger::try_init();
-
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::default().with_body("blah"),
@@ -901,8 +892,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_completed_part_timeout() {
-        let _ = env_logger::try_init();
-
         // credential docs: https://github.com/rusoto/rusoto/blob/master/AWS-CREDENTIALS.md
         let client = S3Client::new_with(
             MockRequestDispatcher::with_dispatch_error(
@@ -932,8 +921,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_file_read_err_exits_early() {
-        let _ = env_logger::try_init();
-
         let reader = Builder::new()
             .read("ohno".as_bytes())
             .read_error(std::io::Error::new(
@@ -970,8 +957,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_upload_parts_network_err_exits_early() {
-        let _ = env_logger::try_init();
-
         let reader = Builder::new()
             .read("ohno".as_bytes())
             .read("ohno".as_bytes())

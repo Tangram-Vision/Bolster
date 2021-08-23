@@ -743,8 +743,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_datasets_get_malformed_json() {
-        // let _ = env_logger::try_init();
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -776,8 +774,6 @@ mod tests {
 
     #[tokio::test]
     async fn test_datasets_get_401_response() {
-        // let _ = env_logger::try_init();
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
