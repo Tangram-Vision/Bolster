@@ -44,23 +44,27 @@
 //!
 //! ---
 //!
-//! ```bolster upload <system_id> <path>...```
+//! ```bolster upload <SYSTEM_ID> <PLEX_PATH> <OBJECT_SPACE_CSV_PATH> <PATH>...```
 //!
 //! Creates a new dataset associated with the system ID and uploads all
-//! files in the provided path(s). If any path is a directory, all files in the
-//! directory will be uploaded. Folder structure is preserved when uploading to
-//! cloud storage. Does not follow symlinks.
+//! files in the provided path(s). If any data path (the last argument, which
+//! may be repeated) is a directory, all files in the directory will be
+//! uploaded. Folder structure is preserved when uploading to cloud storage.
+//! Does not follow symlinks.
 //!
 //! Uploading files creates a new dataset and outputs the created dataset's
 //! UUID, which can be used to download or query the dataset or the files it
 //! contains in the future.
 //!
-//! The `<system_id>` provided when uploading a dataset should match however
+//! The `<SYSTEM_ID>` provided when uploading a dataset should match however
 //! you identify your systems/robots/installations, whether that be by an
 //! integer (e.g. "unit 1") or a serial (e.g. "A12") or a build date (e.g.
 //! "12-MAY-2021") or a location (e.g. "field3" or "southwest-corner") or
 //! anything else. The dataset will be associated with the given system_id, to
 //! allow filtering datasets (and processing results) by system.
+//!
+//! For more info about plexes and object-space CSV files, please see the
+//! Tangram Vision SDK documentation.
 //!
 //! Note: Only files up to 4.88 TB may be uploaded.
 //!
@@ -69,13 +73,13 @@
 //! S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html)).
 //!
 //! ![Bolster upload example
-//! gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload.gif)
+//! gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload-0.2.0.gif)
 //!
 //! <br>
 //!
 //! ---
 //!
-//! ```bolster download <dataset_uuid> [prefix]...```
+//! ```bolster download <DATASET_UUID> [PREFIX]...```
 //!
 //! Downloads files from the given dataset. Files to download may be filtered
 //! by providing prefix(es). If multiple prefixes are provided, all files
@@ -85,7 +89,7 @@
 //! prompted to continue.
 //!
 //! ![Bolster download example
-//! gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download.gif)
+//! gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download-0.2.0.gif)
 //!
 //! <br>
 //!
@@ -99,29 +103,30 @@
 //! listed.
 //!
 //! ![Bolster ls example
-//! image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls.png)
+//! image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls-0.2.0.png)
 //!
 //! ## Examples
 //!
 //! ```shell
-//! ###############
+//! ##################
 //! # bolster upload
-//! ###############
+//! ##################
 //!
-//! # Uploads myfile1 as a new dataset for the "robot-1" system.
-//! bolster upload robot-1 myfile1
+//! # Uploads the "robot-walle" system's plex and object-space CSV, along with
+//! # ros-data.bag as a new dataset.
+//! bolster upload robot-walle v1.plex checkerboard.csv ros-data.bag
 //!
-//! # Uploads myfile1, myfile2, and myfile3 as a new dataset for the "drone-A12"
-//! # system.
-//! bolster upload drone-A12 myfile1 myfile2 myfile3
+//! # Uploads contents of the data folder as a new dataset for the
+//! # "drone-maverick" system.
+//! bolster upload drone-maverick maverick.plex object-space.csv data/*
 //!
-//! # Uploads all files in myfolder1 and myfile4 as a new dataset for "johnny-5"
-//! # system.
-//! bolster upload johnny-5 myfolder1 myfolder2/myfile4
+//! # Uploads all files in camera-1 and camera-2 folders as a new dataset for
+//! # "johnny-5" system.
+//! bolster upload johnny-5 2021aug.plex 2021aug.csv camera-1 camera-2
 //!
-//! ###############
+//! ####################
 //! # bolster download
-//! ###############
+//! ####################
 //!
 //! # Downloads all files in dataset 1415fe36-851f-4c62-a616-4f5e343ba5fc to
 //! # your current working directory.
@@ -132,15 +137,14 @@
 //! bolster download 1415fe36-851f-4c62-a616-4f5e343ba5fc myfile1 myfile2
 //!
 //! # Downloads all files in myfolder1 of the remote dataset into myfolder1 in
-//! # your current working directory. myfolder1 is created if it does not
-//! # exist.
+//! # your current working directory. Creates myfolder1 if it does not exist.
 //! bolster download 1415fe36-851f-4c62-a616-4f5e343ba5fc myfolder1
 //!
-//! ###############
+//! ##############
 //! # bolster ls
-//! ###############
+//! ##############
 //!
-//! # List 100 datasets instead of showing the default limit 20
+//! # List 100 datasets instead of showing the default limit of 20
 //! bolster ls --limit=100
 //!
 //! # List all files in the specified dataset
@@ -156,12 +160,12 @@
 //! for potential solutions. If the issue persists, please [let us
 //! know](https://tangram-vision.canny.io).
 //!
-//! | Error                                     | Resolution                                                                                                                                                                                                                                                      |
-//! |-                                          |-                                                                                                                                                                                                                                                                |
-//! | Configuration file not found              | Bolster will use a configuration file located at `~/.config/tangram_vision/bolster.toml` by default. Alternately, provide a config file via the `--config` option, e.g. `bolster --config=path/to/bolster.toml ls`.                                             |
-//! | Connection refused                        | Bolster upload/download/ls subcommands require an internet connection -- make sure your connection is working and that you can reach bolster.tangramvision.com and s3.us-west-1.amazonaws.com without interference or disruption from any firewalls or proxies. |
-//! | All file/folder names must be valid UTF-8 | All filepaths uploaded as a dataset must be valid UTF-8 as required by S3-compatible cloud storage providers.                                                                                                                                                   |
-//! | File/folder paths must be relative        | You may not use absolute filepaths with the upload sub-command, such as `/dir/file` or `~/dir/file`, because bolster preserves the folder structure of uploaded files.                                                                                          |
+//! | Error | Resolution |
+//! |-|-|
+//! | Configuration file not found | Bolster will use a configuration file located at `~/.config/tangram_vision/bolster.toml` by default. Alternately, provide a config file via the `--config` option, e.g. `bolster --config=path/to/bolster.toml ls`. |
+//! | Connection refused | Bolster upload/download/ls subcommands require an internet connection -- make sure your connection is working and that you can reach bolster.tangramvision.com and s3.us-west-1.amazonaws.com without interference or disruption from any firewalls or proxies. |
+//! | All file/folder names must be valid UTF-8 | All filepaths uploaded as a dataset must be valid UTF-8 as required by S3-compatible cloud storage providers. |
+//! | File/folder paths must be relative | You may not use absolute filepaths with the upload sub-command, such as `/dir/file` or `~/dir/file`, because bolster preserves the folder structure of uploaded files. |
 //!
 //! # Security
 //!
