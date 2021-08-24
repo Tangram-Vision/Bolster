@@ -12,7 +12,7 @@ If you have [Rust installed](https://rustup.rs/), you can install bolster
 with:
 
 ```shell
-cargo install --branch=main --git=https://gitlab.com/tangram-vision-oss/bolster.git
+cargo install --branch=release/0.2 --git=https://gitlab.com/tangram-vision-oss/bolster.git
 ```
 
 Alternatively, release binaries are published for supported platforms at
