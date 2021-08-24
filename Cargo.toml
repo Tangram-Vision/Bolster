@@ -1,6 +1,6 @@
 [package]
 name = "bolster"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Greg Schafer <greg.schafer@tangramvision.com>"]
 edition = "2018"
 publish = false
