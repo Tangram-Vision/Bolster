@@ -34,6 +34,7 @@ indicatif = "0.16"
 lazy_static = "1.4"
 log = "0.4"
 md5 = "0.7"
+openssl = { version = "= 0.10.36", features = ["vendored"]}
 rand = "0.8"
 read-progress-stream = "1.0"
 rusoto_core = "0.46"
