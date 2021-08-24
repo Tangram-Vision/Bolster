@@ -4,10 +4,10 @@
 
 use std::time::Duration;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Error, Result};
 use chrono::NaiveDate;
 use log::debug;
-use reqwest::{header, Url};
+use reqwest::{header, Response, StatusCode, Url};
 use serde_json::json;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
@@ -80,8 +80,8 @@ impl DatasetOrdering {
 pub struct DatasetGetRequest {
     /// Filter to a specific dataset
     pub dataset_id: Option<Uuid>,
-    /// Filter to a specific device/robot/installation
-    pub device_id: Option<String>,
+    /// Filter to a specific system/device/robot/installation
+    pub system_id: Option<String>,
     /// Filter to datasets before a date
     pub before_date: Option<NaiveDate>,
     /// Filter to datasets after a date
@@ -106,13 +106,66 @@ impl Default for DatasetGetRequest {
     fn default() -> Self {
         Self {
             dataset_id: None,
-            device_id: None,
+            system_id: None,
             before_date: None,
             after_date: None,
             order: None,
             limit: None,
             offset: None,
         }
+    }
+}
+
+/// Responses with any of these [StatusCode]s show extra detail.
+const ERROR_STATUSES_TO_SHOW_DETAIL: [StatusCode; 3] = [
+    StatusCode::BAD_REQUEST,
+    StatusCode::UNAUTHORIZED,
+    StatusCode::FORBIDDEN,
+];
+
+/// Returns response json or an error with extra context/detail.
+///
+/// For responses with a status code in [ERROR_STATUSES_TO_SHOW_DETAIL], return
+/// an error message that includes contents of "message", "detail", and "hint"
+/// fields in the API response, if they're provided. This will be used to inform
+/// users if they're providing bad input to the API or if a particular API
+/// endpoint is disabled/retired (and the user should upgrade to a newer version
+/// of bolster).
+pub async fn check_response(response: Response) -> Result<serde_json::Value> {
+    let status = response.status();
+    debug!("check_response status: {}", status);
+    let status_maybe_err = response.error_for_status_ref();
+    if status_maybe_err.is_ok() {
+        let content = response
+            .json()
+            .await
+            .with_context(|| "JSON from API was malformed.");
+        debug!("check_response content: {:?}", content);
+        let content = content?;
+        return Ok(content);
+    }
+
+    let status_err = status_maybe_err.unwrap_err();
+    if status_err.status().is_some()
+        && ERROR_STATUSES_TO_SHOW_DETAIL.contains(&status_err.status().unwrap())
+    {
+        response.json::<serde_json::Value>().await.map(|js| {
+            // Build up error to show user from error message and any message,
+            // detail, and hint fields that are populated.
+            let mut err_msg = format!("{}", status_err);
+            if let Some(Some(msg)) = js.get("message").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tMessage: {}", msg))
+            }
+            if let Some(Some(detail)) = js.get("detail").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tDetail: {}", detail))
+            }
+            if let Some(Some(hint)) = js.get("hint").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tHint: {}", hint))
+            }
+            bail!(err_msg);
+        })?
+    } else {
+        Err(Error::new(status_err))
     }
 }
 
@@ -138,8 +191,8 @@ pub async fn datasets_get(
     if let Some(dataset_id) = &params.dataset_id {
         req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
     }
-    if let Some(device_id) = &params.device_id {
-        req_builder = req_builder.query(&[("device_id", format!("eq.{}", device_id))]);
+    if let Some(system_id) = &params.system_id {
+        req_builder = req_builder.query(&[("system_id", format!("eq.{}", system_id))]);
     }
     if let Some(before_date) = &params.before_date {
         req_builder = req_builder.query(&[("created_date", format!("lt.{}", before_date))]);
@@ -163,14 +216,13 @@ pub async fn datasets_get(
     }
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let datasets: Vec<Dataset> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
+    let datasets: Vec<Dataset> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Datasets API was malformed: {}", content))?;
     Ok(datasets)
 }
 
@@ -186,10 +238,10 @@ pub async fn datasets_get(
 /// data is malformed (e.g. not json).
 pub async fn datasets_post(
     configuration: &DatabaseApiConfig,
-    device_id: String,
+    system_id: String,
     metadata: serde_json::Value,
 ) -> Result<DatasetNoFiles> {
-    debug!("Building post request for: {} {:?}", device_id, metadata);
+    debug!("Building post request for: {} {:?}", system_id, metadata);
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
@@ -197,20 +249,19 @@ pub async fn datasets_post(
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
-        "device_id": device_id,
+        "system_id": system_id,
         "metadata": metadata,
     });
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Datasets API was malformed: {}", &content))?;
+    let mut datasets: Vec<DatasetNoFiles> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Datasets API was malformed: {}", content))?;
     // PostgREST resturns a list, even when only a single object is expected
     // https://postgrest.org/en/v7.0.0/api.html#singular-or-plural
     datasets
@@ -264,14 +315,13 @@ pub async fn files_get(
     };
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
-    let files: Vec<UploadedFile> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    let files: Vec<UploadedFile> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Files API was malformed: {}", content))?;
     Ok(files)
 }
 
@@ -307,16 +357,15 @@ pub async fn files_post(
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
     // TODO: Add context to 409 response (dataset doesn't exist) OR validate it
     // does before uploading to storage provider.
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("response content: {}", content);
 
-    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_str(&content)
-        .with_context(|| format!("JSON from Files API was malformed: {}", &content))?;
+    let mut uploaded_files: Vec<UploadedFile> = serde_json::from_value(content.clone())
+        .with_context(|| format!("JSON from Files API was malformed: {}", content))?;
     uploaded_files
         .pop()
         .ok_or_else(|| anyhow!("Database returned no info for updated File!"))
@@ -333,6 +382,7 @@ pub async fn files_post(
 pub async fn datasets_notify_upload_complete(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
+    plex_file_id: Uuid,
 ) -> Result<()> {
     debug!(
         "Building datasets_notify_upload_complete post request for: {}",
@@ -341,19 +391,19 @@ pub async fn datasets_notify_upload_complete(
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("rpc/dataset_upload_complete");
+    api_url.set_path("rpc/dataset_upload_complete_v2");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
         "dataset_id": dataset_id,
+        "plex_file_id": plex_file_id,
     });
     req_builder = req_builder.json(&req_body);
 
     let response = req_builder.send().await?;
-    response.error_for_status_ref()?;
 
     debug!("status: {}", response.status());
-    let content = response.text().await?;
+    let content: serde_json::Value = check_response(response).await?;
     debug!("content: {}", content);
 
     Ok(())
@@ -371,6 +421,201 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn test_check_response_200() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(200)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        check_response(response)
+            .await
+            .expect("200 response should be Ok");
+
+        mock.assert();
+    }
+
+    #[tokio::test]
+    async fn test_check_response_400_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(400)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("400 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_400_message_only() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(400)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": null,
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("400 response should be Err");
+
+        mock.assert();
+        println!("{}", error);
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Hint"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_401_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(401)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("401 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_403_message_detail_hint() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(403)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("403 response should be Err");
+
+        mock.assert();
+        assert!(format!("{}", error).contains("Message: a"));
+        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Hint: c"));
+    }
+
+    #[tokio::test]
+    async fn test_check_response_500_has_no_detail() {
+        let server = MockServer::start();
+        let mock = server.mock(|when, then| {
+            when.method(GET);
+            then.status(500)
+                .header("Content-Type", "application/json")
+                .json_body(json!({
+                    "message": "a",
+                    "detail": "b",
+                    "hint": "c",
+                }));
+        });
+
+        let config = DatabaseApiConfig::new_with_params(
+            Url::parse(&server.base_url()).unwrap(),
+            "TEST-TOKEN".to_owned(),
+            10,
+        )
+        .unwrap();
+        let req_builder = config.client.get(config.base_url.clone().as_str());
+        let response = req_builder.send().await.unwrap();
+
+        let error = check_response(response)
+            .await
+            .expect_err("500 response should be Err");
+
+        mock.assert();
+        assert!(!format!("{}", error).contains("Message"));
+        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Hint"));
+    }
+
+    #[tokio::test]
     async fn test_datasets_get_success() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
@@ -383,7 +628,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },
@@ -425,7 +670,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "afd56ecf-9d87-4053-8c80-0d924f06da52",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },
@@ -519,13 +764,12 @@ mod tests {
         let result = datasets_get(&config, &params)
             .await
             .expect_err("Expected json parsing error");
-        let downcast = result.downcast_ref::<serde_json::Error>().unwrap();
+        println!("result: {:?}", result);
+        let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
-        assert_eq!(downcast.classify(), serde_json::error::Category::Syntax);
-        assert!(result
-            .to_string()
-            .contains("JSON from Datasets API was malformed: this isn't actually json"));
+        assert!(downcast.is_decode());
+        assert!(result.to_string().contains("JSON from API was malformed"));
     }
 
     #[tokio::test]
@@ -551,13 +795,8 @@ mod tests {
         let result = datasets_get(&config, &params)
             .await
             .expect_err("Expected status code error");
-        let downcast = result.downcast_ref::<reqwest::Error>().unwrap();
 
         mock.assert();
-        assert_eq!(
-            downcast.status().unwrap(),
-            reqwest::StatusCode::UNAUTHORIZED
-        );
         assert!(result
             .to_string()
             .contains("HTTP status client error (401 Unauthorized) for url"));
@@ -602,8 +841,8 @@ mod tests {
         let mock = server.mock(|when, then| {
             when.method(POST)
                 .header("Authorization", "Bearer TEST-TOKEN")
-                .body(r#"{"dataset_id":"afd56ecf-9d87-4053-8c80-0d924f06da52"}"#)
-                .path("/rpc/dataset_upload_complete");
+                .body(r#"{"dataset_id":"afd56ecf-9d87-4053-8c80-0d924f06da52","plex_file_id":"bfd56ecf-9d87-4053-8c80-0d924f06da52"}"#)
+                .path("/rpc/dataset_upload_complete_v2");
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
@@ -618,8 +857,9 @@ mod tests {
         )
         .unwrap();
         let dataset_id = Uuid::parse_str("afd56ecf-9d87-4053-8c80-0d924f06da52").unwrap();
+        let plex_file_id = Uuid::parse_str("bfd56ecf-9d87-4053-8c80-0d924f06da52").unwrap();
 
-        datasets_notify_upload_complete(&config, dataset_id)
+        datasets_notify_upload_complete(&config, dataset_id, plex_file_id)
             .await
             .unwrap();
 

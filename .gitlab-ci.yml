@@ -38,6 +38,14 @@ doc-check:
     - cargo clippy --all-targets --all-features -- -A clippy::all -D clippy::missing_docs_in_private_items
   allow_failure: true
 
+readme-check:
+  stage: doc
+  variables:
+    # Catches and fails on non-zero status
+    FF_ENABLE_BASH_EXIT_CODE_CHECK: 1
+  script:
+    - readme_check.sh --no-badges --no-title --no-indent-headings
+
 pages:
   stage: doc
   # Run this at the same time as test and lint jobs

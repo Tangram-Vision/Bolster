@@ -93,10 +93,6 @@ mod tests {
 
     #[test]
     fn test_cli_no_files_in_dataset() {
-        // To debug what rusoto and httpmock are doing, enable logger and run
-        // tests with debug or trace level.
-        // let _ = env_logger::try_init();
-
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
@@ -108,7 +104,7 @@ mod tests {
                 .json_body(json!([{
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "device_id": "robot-1",
+                    "system_id": "robot-1",
                     "metadata": {
                         "description": "Test"
                     },
@@ -132,15 +128,17 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let filepath = Path::new("src/resources/test_full_config.toml")
-            .canonicalize()
-            .unwrap();
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("src/resources/test.bag").canonicalize().unwrap();
         assert!(filepath.is_absolute());
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -151,14 +149,41 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        // path is '255'.bag
+        let pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 98, 97, 103]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
             .arg(pathbuf)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "All file/folder names must be valid UTF-8",
+            ));
+    }
+    #[test]
+    fn test_cli_upload_disallows_non_utf8_plex_path() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let filepath = Path::new("src/resources/test.bag");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        // path is '255'.plex
+        let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 112, 108, 101, 120]));
+        std::fs::write(plex_pathbuf.as_path(), "bolster test").unwrap();
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_pathbuf)
+            .arg(csv_filepath)
+            .arg(filepath)
             .assert()
             .failure()
             .stderr(predicate::str::contains(
@@ -169,13 +194,17 @@ mod tests {
     #[test]
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let filepath = Path::new("src/resources/test_full_config.toml");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("src/resources/test.bag");
         assert!(filepath.is_relative());
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -197,6 +226,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     // We don't actually want to try to download from cloud
@@ -207,6 +237,7 @@ mod tests {
                     "version": "blah",
                     "metadata": {},
                 }, {
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
@@ -245,6 +276,7 @@ mod tests {
             then.status(200)
                 .header("Content-Type", "application/json")
                 .json_body(json!([{
+                    "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
                     // We don't actually want to try to download from cloud
@@ -276,15 +308,106 @@ mod tests {
     #[test]
     fn test_cli_digitalocean_provider_available() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg("--provider=digitalocean")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
             .arg("non-existent-file")
             .assert()
             .failure()
-            .stderr(predicate::str::contains("is not a directory or a file"));
+            .stderr(predicate::str::contains(
+                r#"Data file ("non-existent-file") does not exist or is unreadable"#,
+            ));
+    }
+
+    #[test]
+    fn test_cli_plex_file_must_exist() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/non-existent.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("src/resources/test.bag");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(format!(
+                "Plex file ({:?}) does not exist or is unreadable",
+                plex_filepath
+            )));
+    }
+
+    #[test]
+    fn test_cli_errors_if_plex_path_has_dots() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/../src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("src/resources/test.bag");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Paths must not contain './' or '../'.",
+            ));
+    }
+
+    #[test]
+    fn test_cli_errors_if_data_path_has_dots() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("../bolster/src/resources/test.bag");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Paths must not contain './' or '../'.",
+            ));
+    }
+
+    #[test]
+    fn test_cli_errors_if_uploading_too_many_files() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("src/resources/test.plex");
+        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("target");
+
+        cmd.arg("--config")
+            .arg("src/resources/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(csv_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Please tar/zip the files before uploading!",
+            ));
     }
 }

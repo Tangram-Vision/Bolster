@@ -14,8 +14,8 @@ pub struct Dataset {
     /// Dataset identifier, used for filtering by dataset and downloading files
     /// from the dataset.
     pub dataset_id: Uuid,
-    /// Device/robot/installation identifier, used for filtering.
-    pub device_id: String,
+    /// System/device/robot/installation identifier, used for filtering.
+    pub system_id: String,
     /// Creation date of the dataset.
     ///
     /// The dataset is created before any files are uploaded.
@@ -50,6 +50,8 @@ pub struct DatasetNoFiles {
 /// A file in a dataset.
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 pub struct UploadedFile {
+    /// The file's identifier.
+    pub file_id: Uuid,
     /// The parent [Dataset]'s identifier.
     pub dataset_id: Uuid,
 
@@ -163,6 +165,7 @@ mod tests {
         );
         let uf = UploadedFile {
             dataset_id,
+            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(&url_str).unwrap(),
             filesize: 12,
@@ -184,6 +187,7 @@ mod tests {
         );
         let uf = UploadedFile {
             dataset_id,
+            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
             url: Url::parse(&url_str).unwrap(),
             filesize: 12,
@@ -194,8 +198,7 @@ mod tests {
             .filepath_from_url()
             .expect_err("Url doesn't contain the dataset-id")
             .to_string();
-        assert_eq!(
-            true,
+        assert!(
             predicate::str::is_match("File url .* doesn't contain dataset-id.")
                 .unwrap()
                 .eval(&e)
