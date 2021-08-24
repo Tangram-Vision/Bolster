@@ -2,6 +2,7 @@ To make a release:
 
 1. Create a new branch off `main`, e.g. `release/0.2`
 2. (Optional) update dependencies: `cargo update && git commit -m "Update deps"`
+    1. NOTE: We vendor openssl (for musl builds), so make sure to keep it up-to-date for security
 3. Increment version in `Cargo.toml`
 4. Create a new commit, e.g. `git commit -m "0.2.0"`
 5. Create a new tag, e.g. `git tag -a -m "0.2.0" release/0.2.0`
