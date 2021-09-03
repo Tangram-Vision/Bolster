@@ -205,6 +205,8 @@ mod app_config;
 mod cli;
 mod core;
 
+pub mod object_space;
+
 use anyhow::Result;
 
 #[doc(hidden)]
