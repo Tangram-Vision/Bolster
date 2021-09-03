@@ -5,3 +5,6 @@ proptest-regressions/*
 # Hide environment secrets
 .env*
 **/.env*
+
+*.bag
+*.plex

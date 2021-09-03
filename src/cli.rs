@@ -715,7 +715,8 @@ mod tests {
 
     #[test]
     fn test_clean_and_validate_disallow_non_utf8() {
-        let pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        let mut pathbuf = PathBuf::from(OsString::from_vec(vec![255]));
+        pathbuf.set_extension(OsString::from_str("plex").unwrap());
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
         let path = pathbuf.as_os_str();
