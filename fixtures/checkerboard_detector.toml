@@ -1,0 +1,9 @@
+[camera.detector]
+type = "checkerboard"
+width = 9
+height = 6
+edge_length = 0.061
+variances = [0.01, 0.01, 0.01]
+
+[camera.descriptor]
+type = "detector_defined"
