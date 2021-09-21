@@ -156,8 +156,8 @@ pub async fn check_response(response: Response) -> Result<serde_json::Value> {
             if let Some(Some(msg)) = js.get("message").map(|v| v.as_str()) {
                 err_msg.push_str(&format!("\n\tMessage: {}", msg))
             }
-            if let Some(Some(detail)) = js.get("detail").map(|v| v.as_str()) {
-                err_msg.push_str(&format!("\n\tDetail: {}", detail))
+            if let Some(Some(details)) = js.get("details").map(|v| v.as_str()) {
+                err_msg.push_str(&format!("\n\tDetails: {}", details))
             }
             if let Some(Some(hint)) = js.get("hint").map(|v| v.as_str()) {
                 err_msg.push_str(&format!("\n\tHint: {}", hint))
@@ -429,7 +429,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": "b",
+                    "details": "b",
                     "hint": "c",
                 }));
         });
@@ -451,7 +451,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_check_response_400_message_detail_hint() {
+    async fn test_check_response_400_message_details_hint() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET);
@@ -459,7 +459,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": "b",
+                    "details": "b",
                     "hint": "c",
                 }));
         });
@@ -479,7 +479,7 @@ mod tests {
 
         mock.assert();
         assert!(format!("{}", error).contains("Message: a"));
-        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Details: b"));
         assert!(format!("{}", error).contains("Hint: c"));
     }
 
@@ -492,7 +492,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": null,
+                    "details": null,
                 }));
         });
 
@@ -512,12 +512,12 @@ mod tests {
         mock.assert();
         println!("{}", error);
         assert!(format!("{}", error).contains("Message: a"));
-        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Details"));
         assert!(!format!("{}", error).contains("Hint"));
     }
 
     #[tokio::test]
-    async fn test_check_response_401_message_detail_hint() {
+    async fn test_check_response_401_message_details_hint() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET);
@@ -525,7 +525,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": "b",
+                    "details": "b",
                     "hint": "c",
                 }));
         });
@@ -545,12 +545,12 @@ mod tests {
 
         mock.assert();
         assert!(format!("{}", error).contains("Message: a"));
-        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Details: b"));
         assert!(format!("{}", error).contains("Hint: c"));
     }
 
     #[tokio::test]
-    async fn test_check_response_403_message_detail_hint() {
+    async fn test_check_response_403_message_details_hint() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET);
@@ -558,7 +558,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": "b",
+                    "details": "b",
                     "hint": "c",
                 }));
         });
@@ -578,12 +578,12 @@ mod tests {
 
         mock.assert();
         assert!(format!("{}", error).contains("Message: a"));
-        assert!(format!("{}", error).contains("Detail: b"));
+        assert!(format!("{}", error).contains("Details: b"));
         assert!(format!("{}", error).contains("Hint: c"));
     }
 
     #[tokio::test]
-    async fn test_check_response_500_has_no_detail() {
+    async fn test_check_response_500_has_no_details() {
         let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET);
@@ -591,7 +591,7 @@ mod tests {
                 .header("Content-Type", "application/json")
                 .json_body(json!({
                     "message": "a",
-                    "detail": "b",
+                    "details": "b",
                     "hint": "c",
                 }));
         });
@@ -611,7 +611,7 @@ mod tests {
 
         mock.assert();
         assert!(!format!("{}", error).contains("Message"));
-        assert!(!format!("{}", error).contains("Detail"));
+        assert!(!format!("{}", error).contains("Details"));
         assert!(!format!("{}", error).contains("Hint"));
     }
 
