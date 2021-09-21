@@ -129,7 +129,7 @@ mod tests {
     fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("src/resources/test.bag").canonicalize().unwrap();
         assert!(filepath.is_absolute());
 
@@ -138,7 +138,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -150,7 +150,7 @@ mod tests {
     fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         // path is '255'.bag
         let pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 98, 97, 103]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
@@ -160,7 +160,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(pathbuf)
             .assert()
             .failure()
@@ -172,7 +172,7 @@ mod tests {
     fn test_cli_upload_disallows_non_utf8_plex_path() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let filepath = Path::new("src/resources/test.bag");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         // path is '255'.plex
         let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 112, 108, 101, 120]));
         std::fs::write(plex_pathbuf.as_path(), "bolster test").unwrap();
@@ -182,7 +182,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_pathbuf)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -195,7 +195,7 @@ mod tests {
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("src/resources/test.bag");
         assert!(filepath.is_relative());
 
@@ -204,7 +204,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -309,7 +309,7 @@ mod tests {
     fn test_cli_digitalocean_provider_available() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
 
         cmd.arg("--config")
             .arg("src/resources/test_full_config.toml")
@@ -317,7 +317,7 @@ mod tests {
             .arg("robot-01")
             .arg("--provider=digitalocean")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg("non-existent-file")
             .assert()
             .failure()
@@ -330,7 +330,7 @@ mod tests {
     fn test_cli_plex_file_must_exist() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/non-existent.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("src/resources/test.bag");
 
         cmd.arg("--config")
@@ -338,7 +338,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -352,7 +352,7 @@ mod tests {
     fn test_cli_errors_if_plex_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/../src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("src/resources/test.bag");
 
         cmd.arg("--config")
@@ -360,7 +360,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -373,7 +373,7 @@ mod tests {
     fn test_cli_errors_if_data_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("../bolster/src/resources/test.bag");
 
         cmd.arg("--config")
@@ -381,7 +381,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -394,7 +394,7 @@ mod tests {
     fn test_cli_errors_if_uploading_too_many_files() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
         let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let toml_filepath = Path::new("src/resources/test.toml");
         let filepath = Path::new("target");
 
         cmd.arg("--config")
@@ -402,7 +402,7 @@ mod tests {
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()

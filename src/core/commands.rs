@@ -119,6 +119,7 @@ pub async fn create_and_upload_dataset(
     system_id: String,
     prefix: &str,
     plex_file_path: String,
+    object_space_file_path: String,
     file_paths: Vec<String>,
 ) -> Result<()> {
     let dataset_id: Uuid = create_dataset(db_config, system_id).await?;
@@ -129,9 +130,12 @@ pub async fn create_and_upload_dataset(
     let guard = MultiProgressGuard::new().await;
     let multi_progress = guard.inner.clone();
     let mut maybe_plex_file_id = None;
+    let mut maybe_object_space_file_id = None;
 
-    // Add plex file path to front of list that will become upload futures
+    // Add plex + object_space file paths to front of list that will become
+    // upload futures.
     let mut all_file_paths = file_paths.clone();
+    all_file_paths.insert(0, object_space_file_path.clone());
     all_file_paths.insert(0, plex_file_path.clone());
 
     let mut futs = stream::iter(all_file_paths)
@@ -142,6 +146,8 @@ pub async fn create_and_upload_dataset(
                 // pull out the plex's file_id to associate as the input plex
                 // when triggering calibration.
                 path == plex_file_path,
+                // Do the same with the object_space path
+                path == object_space_file_path,
                 // Uploads to storage AND registers to database
                 upload_file(
                     config.clone(),
@@ -155,10 +161,13 @@ pub async fn create_and_upload_dataset(
             )
         })
         .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
-    while let Some((is_plex, res)) = futs.next().await {
+    while let Some((is_plex, is_object_space, res)) = futs.next().await {
         let uploaded_file = res?;
         if is_plex {
             maybe_plex_file_id = Some(uploaded_file.file_id);
+        }
+        if is_object_space {
+            maybe_object_space_file_id = Some(uploaded_file.file_id);
         }
     }
 
@@ -168,7 +177,15 @@ pub async fn create_and_upload_dataset(
 
     let plex_file_id = maybe_plex_file_id
         .ok_or_else(|| anyhow!("Unable to retrieve file_id for uploaded plex file!"))?;
-    datasets::datasets_notify_upload_complete(db_config, dataset_id, plex_file_id).await?;
+    let object_space_file_id = maybe_object_space_file_id
+        .ok_or_else(|| anyhow!("Unable to retrieve file_id for uploaded object space file!"))?;
+    datasets::datasets_notify_upload_complete(
+        db_config,
+        dataset_id,
+        plex_file_id,
+        object_space_file_id,
+    )
+    .await?;
 
     Ok(())
 }

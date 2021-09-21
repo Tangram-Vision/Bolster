@@ -54,8 +54,8 @@ where
 pub enum PathKind {
     /// Plex (associated path should point to a .plex file)
     Plex,
-    /// Object-space CSV (associated path should point to a .csv file)
-    ObjectSpaceCsv,
+    /// Object-space TOML (associated path should point to a .toml file)
+    ObjectSpaceToml,
     /// Data (associated path(s) should point to a .bag file or folders)
     Data,
 }
@@ -67,8 +67,8 @@ impl PathKind {
     ///
     /// - For [PathKind::Plex], an error is raised if the path doesn't end in
     /// `.plex` or if the path points to a non-existent or unreadable file.
-    /// - For [PathKind::ObjectSpaceCsv], an error is raised if the path doesn't
-    /// end in `.csv` or if the path points to a non-existent or unreadable file.
+    /// - For [PathKind::ObjectSpaceToml], an error is raised if the path doesn't
+    /// end in `.toml` or if the path points to a non-existent or unreadable file.
     /// - For [PathKind::Data], an error is raised if the path points to a file
     /// but the file doesn't end in `.bag`, or if the path points to an
     /// unreadable file or directory, or if the path points to a non-existent
@@ -89,18 +89,18 @@ impl PathKind {
                 }
                 Ok(())
             }
-            PathKind::ObjectSpaceCsv => {
+            PathKind::ObjectSpaceToml => {
                 if path
                     .extension()
                     .unwrap_or_else(|| OsStr::new(""))
                     .to_ascii_lowercase()
-                    != "csv"
+                    != "toml"
                 {
-                    bail!("Object-space CSV file ({:?}) doesn't end in .csv", path);
+                    bail!("Object-space TOML file ({:?}) doesn't end in .toml", path);
                 }
                 if !path.is_file() {
                     bail!(
-                        "Object-space CSV file ({:?}) does not exist or is unreadable",
+                        "Object-space TOML file ({:?}) does not exist or is unreadable",
                         path
                     );
                 }
@@ -136,14 +136,14 @@ impl PathKind {
 ///
 /// # Errors
 ///
-/// Returns an error if any provided paths (i.e. for the plex, csv, or data paths):
+/// Returns an error if any provided paths (i.e. for the plex, toml, or data paths):
 /// - Are absolute
 /// - Contain `.` (current directory) or `..` (parent directory)
 /// - Are not valid UTF-8
-/// - Do not exist (plex and csv arguments must point to a file, data arguments
+/// - Do not exist (plex and toml arguments must point to a file, data arguments
 /// must point to a file or folder)
 /// - Have the wrong extension (the plex argument must be a file ending with
-/// .plex, the object space csv argument must be a file ending with .csv)
+/// .plex, the object space toml argument must be a file ending with .toml)
 pub fn clean_and_validate_path(path_os_str: &OsStr, path_kind: PathKind) -> Result<String> {
     let path = Path::new(path_os_str);
     path_kind.validate(path)?;
@@ -214,8 +214,10 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             let plex_path = upload_matches.value_of_os("plex_path").unwrap();
             let utf8_plex_path = clean_and_validate_path(plex_path, PathKind::Plex)?;
 
-            let csv_path = upload_matches.value_of_os("object_space_csv_path").unwrap();
-            let utf8_csv_path = clean_and_validate_path(csv_path, PathKind::ObjectSpaceCsv)?;
+            let toml_path = upload_matches
+                .value_of_os("object_space_toml_path")
+                .unwrap();
+            let utf8_toml_path = clean_and_validate_path(toml_path, PathKind::ObjectSpaceToml)?;
 
             let file_paths: Vec<&OsStr> = upload_matches.values_of_os("path").unwrap().collect();
             let mut utf8_file_paths: Vec<String> = file_paths
@@ -224,7 +226,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 .collect::<Result<Vec<String>>>()?;
 
             // Collect utf8 paths to all files in any provided data folders (including subfolders)
-            let mut all_utf8_file_paths: Vec<String> = utf8_file_paths
+            let all_utf8_file_paths: Vec<String> = utf8_file_paths
                 .iter_mut()
                 .try_fold(Vec::new(), |mut acc, utf8_path| -> Result<Vec<PathBuf>> {
                     let path = Path::new(utf8_path);
@@ -253,12 +255,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 bail!("You're trying to upload {} files (max = {}). Please tar/zip the files before uploading!", all_utf8_file_paths.len(), UPLOAD_MAX_FILES_ALLOWED);
             }
 
-            // Add the CSV path in with all the data paths. We don't track the
-            // CSV separately (as we do the plex) because we don't anticipate
-            // querying by CSV or tracking different categories of CSVs as we do
-            // with plexes (e.g.  calibrated vs uncalibrated).
-            all_utf8_file_paths.insert(0, utf8_csv_path);
-
             let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {
                 println!(
@@ -267,12 +263,13 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 );
             } else {
                 println!(
-                    "This command will create a dataset with a plex, a csv, and {} data file(s):",
+                    "This command will create a dataset with a plex, a toml, and {} data file(s):",
                     all_utf8_file_paths.len()
                 );
                 println!(
-                    "\t{}\n\t{}",
+                    "\t{}\n\t{}\n\t{}",
                     utf8_plex_path,
+                    utf8_toml_path,
                     all_utf8_file_paths.join("\n\t")
                 );
                 print!("Continue? [y/n] ");
@@ -291,6 +288,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 system_id,
                 &prefix,
                 utf8_plex_path,
+                utf8_toml_path,
                 all_utf8_file_paths,
             )
             .await?;
@@ -476,9 +474,9 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .takes_value(true)
                 )
                 .arg(
-                    Arg::new("object_space_csv_path")
-                        .about("Path to .csv file describing object space.")
-                        .value_name("OBJECT_SPACE_CSV_PATH")
+                    Arg::new("object_space_toml_path")
+                        .about("Path to .toml file describing object space.")
+                        .value_name("OBJECT_SPACE_TOML_PATH")
                         .required(true)
                         .takes_value(true)
                 )
@@ -651,21 +649,21 @@ mod tests {
     }
 
     #[test]
-    fn test_csv_pathkind_validation_good() {
-        let path = Path::new("src/resources/test.csv");
-        PathKind::ObjectSpaceCsv.validate(path).unwrap();
+    fn test_toml_pathkind_validation_good() {
+        let path = Path::new("src/resources/test.toml");
+        PathKind::ObjectSpaceToml.validate(path).unwrap();
     }
 
     #[test]
-    fn test_csv_pathkind_validation_bad_extension() {
-        let path = Path::new("src/resources/test_full_config.toml");
-        PathKind::ObjectSpaceCsv.validate(path).unwrap_err();
+    fn test_toml_pathkind_validation_bad_extension() {
+        let path = Path::new("src/resources/test.plex");
+        PathKind::ObjectSpaceToml.validate(path).unwrap_err();
     }
 
     #[test]
-    fn test_csv_pathkind_validation_nonexistent() {
-        let path = Path::new("non-existent.csv");
-        PathKind::ObjectSpaceCsv.validate(path).unwrap_err();
+    fn test_toml_pathkind_validation_nonexistent() {
+        let path = Path::new("non-existent.toml");
+        PathKind::ObjectSpaceToml.validate(path).unwrap_err();
     }
 
     #[test]
