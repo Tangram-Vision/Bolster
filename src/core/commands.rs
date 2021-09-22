@@ -2,7 +2,15 @@
 //!
 //! For overall architecture, see [ARCHITECTURE.md](https://gitlab.com/tangram-vision-oss/bolster/-/blob/main/ARCHITECTURE.md)
 
-use std::{convert::TryInto, iter, sync::Arc};
+use std::{
+    clone::Clone,
+    cmp::Eq,
+    convert::TryInto,
+    fmt::{Debug, Display},
+    iter,
+    path::Path,
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Result};
 use byte_unit::MEBIBYTE;
@@ -113,14 +121,18 @@ impl Drop for MultiProgressGuard {
 ///
 /// Wraps [create_dataset] and [upload_file] -- see those functions for behavior
 /// and possible errors.
-pub async fn create_and_upload_dataset(
+pub async fn create_and_upload_dataset<P>(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
     system_id: String,
     prefix: &str,
-    plex_file_path: String,
-    file_paths: Vec<String>,
-) -> Result<()> {
+    plex_file_path: P,
+    object_space_file_path: P,
+    file_paths: Vec<P>,
+) -> Result<()>
+where
+    P: AsRef<Path> + Debug + Display + Clone + Eq,
+{
     let dataset_id: Uuid = create_dataset(db_config, system_id).await?;
 
     println!("Created new dataset with UUID: {}", dataset_id);
@@ -129,9 +141,12 @@ pub async fn create_and_upload_dataset(
     let guard = MultiProgressGuard::new().await;
     let multi_progress = guard.inner.clone();
     let mut maybe_plex_file_id = None;
+    let mut maybe_object_space_file_id = None;
 
-    // Add plex file path to front of list that will become upload futures
+    // Add plex + object_space file paths to front of list that will become
+    // upload futures.
     let mut all_file_paths = file_paths.clone();
+    all_file_paths.insert(0, object_space_file_path.clone());
     all_file_paths.insert(0, plex_file_path.clone());
 
     let mut futs = stream::iter(all_file_paths)
@@ -142,6 +157,8 @@ pub async fn create_and_upload_dataset(
                 // pull out the plex's file_id to associate as the input plex
                 // when triggering calibration.
                 path == plex_file_path,
+                // Do the same with the object_space path
+                path == object_space_file_path,
                 // Uploads to storage AND registers to database
                 upload_file(
                     config.clone(),
@@ -155,10 +172,13 @@ pub async fn create_and_upload_dataset(
             )
         })
         .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
-    while let Some((is_plex, res)) = futs.next().await {
+    while let Some((is_plex, is_object_space, res)) = futs.next().await {
         let uploaded_file = res?;
         if is_plex {
             maybe_plex_file_id = Some(uploaded_file.file_id);
+        }
+        if is_object_space {
+            maybe_object_space_file_id = Some(uploaded_file.file_id);
         }
     }
 
@@ -168,7 +188,15 @@ pub async fn create_and_upload_dataset(
 
     let plex_file_id = maybe_plex_file_id
         .ok_or_else(|| anyhow!("Unable to retrieve file_id for uploaded plex file!"))?;
-    datasets::datasets_notify_upload_complete(db_config, dataset_id, plex_file_id).await?;
+    let object_space_file_id = maybe_object_space_file_id
+        .ok_or_else(|| anyhow!("Unable to retrieve file_id for uploaded object space file!"))?;
+    datasets::datasets_notify_upload_complete(
+        db_config,
+        dataset_id,
+        plex_file_id,
+        object_space_file_id,
+    )
+    .await?;
 
     Ok(())
 }
@@ -218,19 +246,27 @@ pub async fn add_file_to_dataset(
 /// Invokes [storage::upload_file_oneshot], [storage::upload_file_multipart],
 /// and [add_file_to_dataset] -- see those functions' documentation for
 /// additional behavior and possible errors.
-pub async fn upload_file(
+pub async fn upload_file<P>(
     config: StorageConfig,
     db_config: &DatabaseApiConfig,
     dataset_id: Uuid,
-    path: String,
+    path: P,
     prefix: &str,
     multi_progress: &MultiProgress,
-) -> Result<UploadedFile> {
+) -> Result<UploadedFile>
+where
+    P: AsRef<Path> + Clone,
+{
     // We retain any directories in the path
-    let key = format!("{}/{}/{}", prefix, dataset_id, path);
+    let path_str = path
+        .as_ref()
+        .to_str()
+        .ok_or_else(|| anyhow!("Path was not UTF8"))?
+        .to_owned();
+    let key = format!("{}/{}/{}", prefix, dataset_id, path_str);
     debug!("key {}", key);
 
-    debug!("Got path {:?}", path);
+    debug!("Got path {:?}", path_str);
     let filesize: usize = tokio::fs::metadata(path.clone())
         .await?
         .len()
@@ -245,7 +281,7 @@ pub async fn upload_file(
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
         let (url, version) =
-            storage::upload_file_oneshot(config, path, filesize, key, multi_progress).await?;
+            storage::upload_file_oneshot(config, path_str, filesize, key, multi_progress).await?;
         // Register uploaded file to database
         add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
     } else {
@@ -253,9 +289,14 @@ pub async fn upload_file(
             "Filesize {} > threshold {} so doing multipart",
             filesize, MULTIPART_FILESIZE_THRESHOLD
         );
-        let (url, version) =
-            storage::upload_file_multipart(config, path, filesize as usize, key, multi_progress)
-                .await?;
+        let (url, version) = storage::upload_file_multipart(
+            config,
+            path_str,
+            filesize as usize,
+            key,
+            multi_progress,
+        )
+        .await?;
         // Register uploaded file to database
         add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
     }
@@ -381,7 +422,7 @@ mod tests {
         let mut config = config::Config::default();
         config
             .merge(config::File::from_str(
-                include_str!("../resources/test_full_config.toml"),
+                include_str!("../../fixtures/test_full_config.toml"),
                 config::FileFormat::Toml,
             ))
             .unwrap();
@@ -436,7 +477,7 @@ mod tests {
             .unwrap();
 
         let url_str =
-            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/src/resources/test.dat";
+            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/fixtures/test.dat";
         let uploaded_files = vec![UploadedFile {
             file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),

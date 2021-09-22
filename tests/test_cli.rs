@@ -22,7 +22,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("config")
             .env("BOLSTER__DATABASE__JWT", "a different jwt")
             .assert()
@@ -35,7 +35,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("ls")
             .arg("--uuid=not-a-real-uuid")
             .assert()
@@ -50,7 +50,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("ls")
             .arg("--after-date=whatever")
             .assert()
@@ -65,7 +65,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("ls")
             .arg("--after-date=2021-01-01")
             .arg("--before-date=2020-01-01")
@@ -81,7 +81,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("ls")
             .arg("--creator=tangram_user")
             .assert()
@@ -115,7 +115,7 @@ mod tests {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("ls")
             .arg("--uuid=26fb2ac2-642a-4d7e-8233-b1835623b46b")
             .env("BOLSTER__DATABASE__URL", server.base_url())
@@ -128,17 +128,17 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_absolute_filepath() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
-        let filepath = Path::new("src/resources/test.bag").canonicalize().unwrap();
+        let plex_filepath = Path::new("fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("fixtures/empty.bag").canonicalize().unwrap();
         assert!(filepath.is_absolute());
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -149,18 +149,18 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_non_utf8() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let plex_filepath = Path::new("fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
         // path is '255'.bag
         let pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 98, 97, 103]));
         std::fs::write(pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(pathbuf)
             .assert()
             .failure()
@@ -171,18 +171,18 @@ mod tests {
     #[test]
     fn test_cli_upload_disallows_non_utf8_plex_path() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let filepath = Path::new("src/resources/test.bag");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let filepath = Path::new("fixtures/empty.bag");
+        let toml_filepath = Path::new("fixtures/empty.toml");
         // path is '255'.plex
         let plex_pathbuf = PathBuf::from(OsString::from_vec(vec![255, 46, 112, 108, 101, 120]));
         std::fs::write(plex_pathbuf.as_path(), "bolster test").unwrap();
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_pathbuf)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -194,17 +194,17 @@ mod tests {
     #[test]
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
-        let filepath = Path::new("src/resources/test.bag");
+        let plex_filepath = Path::new("fixtures/example.plex");
+        let toml_filepath = Path::new("fixtures/checkerboard_detector.toml");
+        let filepath = Path::new("fixtures/empty.bag");
         assert!(filepath.is_relative());
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .write_stdin("n")
             .assert()
@@ -232,7 +232,7 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/fixtures/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -240,7 +240,7 @@ mod tests {
                     "file_id": "16fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "dataset_id": "26fb2ac2-642a-4d7e-8233-b1835623b46b",
                     "created_date": "2021-02-03T21:21:57.713584+00:00",
-                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/someotherfile.dat",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/fixtures/someotherfile.dat",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -248,7 +248,7 @@ mod tests {
         });
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("download")
             .arg("26fb2ac2-642a-4d7e-8233-b1835623b46b")
             .env("BOLSTER__DATABASE__URL", server.base_url())
@@ -257,7 +257,7 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("Downloading 2 files, total 246 B"))
             .stdout(predicate::str::contains(
-                "Overwrite file: src/resources/test_full_config.toml ? [y/n]",
+                "Overwrite file: fixtures/test_full_config.toml ? [y/n]",
             ));
         mock.assert();
     }
@@ -282,7 +282,7 @@ mod tests {
                     // We don't actually want to try to download from cloud
                     // storage, so we'll force the overwrite prompt by matching
                     // filename of test config file and respond with no.
-                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/src/resources/test_full_config.toml",
+                    "url": "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/26fb2ac2-642a-4d7e-8233-b1835623b46b/fixtures/test_full_config.toml",
                     "filesize": 123,
                     "version": "blah",
                     "metadata": {},
@@ -290,7 +290,7 @@ mod tests {
         });
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("download")
             .arg("26fb2ac2-642a-4d7e-8233-b1835623b46b")
             .arg("test_full")
@@ -300,7 +300,7 @@ mod tests {
             .success()
             .stdout(predicate::str::contains("Downloading 1 files, total 123 B"))
             .stdout(predicate::str::contains(
-                "Overwrite file: src/resources/test_full_config.toml ? [y/n]",
+                "Overwrite file: fixtures/test_full_config.toml ? [y/n]",
             ));
         mock.assert();
     }
@@ -308,16 +308,16 @@ mod tests {
     #[test]
     fn test_cli_digitalocean_provider_available() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let plex_filepath = Path::new("fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg("--provider=digitalocean")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg("non-existent-file")
             .assert()
             .failure()
@@ -329,16 +329,16 @@ mod tests {
     #[test]
     fn test_cli_plex_file_must_exist() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/non-existent.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
-        let filepath = Path::new("src/resources/test.bag");
+        let plex_filepath = Path::new("fixtures/non-existent.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("fixtures/empty.bag");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -351,16 +351,16 @@ mod tests {
     #[test]
     fn test_cli_errors_if_plex_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/../src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
-        let filepath = Path::new("src/resources/test.bag");
+        let plex_filepath = Path::new("fixtures/../fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("fixtures/empty.bag");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -372,16 +372,16 @@ mod tests {
     #[test]
     fn test_cli_errors_if_data_path_has_dots() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
-        let filepath = Path::new("../bolster/src/resources/test.bag");
+        let plex_filepath = Path::new("fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("../bolster/fixtures/empty.bag");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
@@ -393,21 +393,42 @@ mod tests {
     #[test]
     fn test_cli_errors_if_uploading_too_many_files() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("src/resources/test.plex");
-        let csv_filepath = Path::new("src/resources/test.csv");
+        let plex_filepath = Path::new("fixtures/empty.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
         let filepath = Path::new("target");
 
         cmd.arg("--config")
-            .arg("src/resources/test_full_config.toml")
+            .arg("fixtures/test_full_config.toml")
             .arg("upload")
             .arg("robot-01")
             .arg(plex_filepath)
-            .arg(csv_filepath)
+            .arg(toml_filepath)
             .arg(filepath)
             .assert()
             .failure()
             .stderr(predicate::str::contains(
                 "Please tar/zip the files before uploading!",
+            ));
+    }
+
+    #[test]
+    fn test_cli_errors_on_bad_object_space_toml() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("fixtures/example.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("fixtures/empty.bag");
+
+        cmd.arg("--config")
+            .arg("fixtures/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(toml_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Unable to read TOML object-space file!",
             ));
     }
 }
