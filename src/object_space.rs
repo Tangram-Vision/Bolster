@@ -143,7 +143,11 @@ pub enum Descriptor {
     DetectorDefined,
 
     /// The descriptor is to be defined in terms of a list of identified points & variances.
-    TargetList { targets: Vec<Target> },
+    TargetList {
+        /// The list of targets (id / coords / variances) that describe the object-space that the
+        /// detector detects.
+        targets: Vec<Target>,
+    },
 }
 
 /// A function to read in the object space config from a TOML file at the given path.
