@@ -1,0 +1,807 @@
+[camera.detector]
+type = "april_grid"
+length = 0.05
+family = "tag16h5"
+
+[camera.descriptor]
+type = "target_list"
+
+[[camera.descriptor.targets]]
+id = 4
+coordinates = [4.294408907683225, 8.079633888899748, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 5
+coordinates = [9.794408907683186, 8.079634545924831, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 6
+coordinates = [9.794408907683188, 2.591142011730746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 7
+coordinates = [4.296822160810919, 2.587920453495417, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 8
+coordinates = [4.294418106034381, 19.081653584002996, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 9
+coordinates = [9.794408907683184, 19.072791629691448, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 10
+coordinates = [9.794408907683186, 13.57955471737728, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 11
+coordinates = [4.296835958337651, 13.579554717377276, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 12
+coordinates = [4.297259739515806, 30.083499167459408, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 13
+coordinates = [9.802613836912329, 30.0725662700881, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 14
+coordinates = [9.805310267850535, 24.57086161851182, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 15
+coordinates = [4.300784350570394, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 16
+coordinates = [4.294407593633062, 41.065087353574945, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 17
+coordinates = [9.794408907683184, 41.06159723633718, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 18
+coordinates = [9.794408907683186, 35.568975299500146, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 19
+coordinates = [4.29682478891125, 35.564946421694806, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 20
+coordinates = [4.294420734134709, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 21
+coordinates = [9.794408907683188, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 22
+coordinates = [9.794408907683188, 46.55878943964745, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 23
+coordinates = [4.296837600900356, 46.55878943964745, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 24
+coordinates = [15.294316595659073, 8.079634545924831, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 25
+coordinates = [20.790958211950286, 8.079633888899746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 26
+coordinates = [20.785598201327982, 2.591123450772167, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 27
+coordinates = [15.296730505811844, 2.587906984481228, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 28
+coordinates = [15.29432579401022, 19.081691691457777, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 29
+coordinates = [20.790927988796497, 19.072834993346884, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 30
+coordinates = [20.785564036023697, 13.579554717377272, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 31
+coordinates = [15.296743646313491, 13.57955471737728, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 32
+coordinates = [15.297429580499529, 30.072450633673597, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 33
+coordinates = [20.79415661005146, 30.08369890308446, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 34
+coordinates = [20.79054822829886, 24.57086161851182, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 35
+coordinates = [15.294704240457687, 24.57086161851182, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 36
+coordinates = [15.294315281608903, 41.06510312217692, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 37
+coordinates = [20.790956897900124, 41.061613004939154, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 38
+coordinates = [20.785592945127323, 35.56895164659718, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 39
+coordinates = [15.29673313391217, 35.56493065309283, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 40
+coordinates = [15.294328422110551, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 41
+coordinates = [20.79093061689683, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 42
+coordinates = [20.7855600938732, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 43
+coordinates = [15.296744960363654, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 44
+coordinates = [26.285484207476152, 8.093118671691137, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 45
+coordinates = [31.790090281816344, 8.080267261079191, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 46
+coordinates = [31.785809106379347, 2.5983321657201044, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 47
+coordinates = [26.285484207476145, 2.5854257292575054, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 48
+coordinates = [26.285484207476145, 19.08847744650891, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 49
+coordinates = [31.790069257013712, 19.075954548438173, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 50
+coordinates = [31.785785453476397, 13.589671589596232, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 51
+coordinates = [26.285484207476152, 13.576880625291865, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 52
+coordinates = [26.285484207476145, 30.07374891523644, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 53
+coordinates = [31.797270251916924, 30.070195723590764, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 54
+coordinates = [31.7964791937177, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 55
+coordinates = [26.285484207476145, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 56
+coordinates = [26.285484207476145, 41.07615691216339, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 57
+coordinates = [31.790090281816347, 41.06330287345113, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 58
+coordinates = [31.785806478279024, 35.576428592035015, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 59
+coordinates = [26.28548420747614, 35.56354301611877, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 60
+coordinates = [26.28548420747614, 52.07151371590592, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 61
+coordinates = [31.790069257013705, 52.0589934459355, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 62
+coordinates = [31.785782825376067, 46.56890236971592, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 63
+coordinates = [26.28548420747614, 46.55611403351188, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 64
+coordinates = [37.27744550559278, 8.079633888899748, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 65
+coordinates = [42.77933412419212, 8.07963454592483, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 66
+coordinates = [42.77692152808952, 2.5911416832182046, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 67
+coordinates = [37.27986072979572, 2.5879204534954185, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 68
+coordinates = [37.27745601799409, 19.081653584002996, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 69
+coordinates = [42.779320983690475, 19.072789001591115, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 70
+coordinates = [42.77690575948754, 13.57955471737728, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 71
+coordinates = [37.279873870297365, 13.579554717377283, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 72
+coordinates = [37.28029962255077, 30.083499167459415, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 73
+coordinates = [42.78565207738458, 30.072566270088096, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 74
+coordinates = [42.78834850832279, 24.57086161851182, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 75
+coordinates = [37.283821276992484, 24.57086161851183, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 76
+coordinates = [37.27744550559277, 41.065087353574945, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 77
+coordinates = [42.77933149609179, 41.06159460823685, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 78
+coordinates = [42.77691889998919, 35.56897267139981, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 79
+coordinates = [37.27986335789605, 35.564946421694806, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 80
+coordinates = [37.277458646094416, 52.05824706544188, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 81
+coordinates = [42.779320983690475, 52.05824706544188, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 82
+coordinates = [42.77690313138721, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 83
+coordinates = [37.27987649839769, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 84
+coordinates = [48.27789293967382, 8.079633888899748, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 85
+coordinates = [53.77538474642168, 8.07963454592483, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 86
+coordinates = [53.77538474642168, 2.591127392922662, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 87
+coordinates = [48.27789293967382, 2.5879058346873336, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 88
+coordinates = [48.27789293967382, 19.08169037740761, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 89
+coordinates = [53.775384746421665, 19.072832365246555, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 90
+coordinates = [53.775384746421665, 13.579554717377276, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 91
+coordinates = [48.27789293967382, 13.579554717377277, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 92
+coordinates = [48.280468477996855, 30.072516336181838, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 93
+coordinates = [53.78278547694995, 30.083578010469303, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 94
+coordinates = [53.77893793806736, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 95
+coordinates = [48.27774050985469, 24.570861618511817, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 96
+coordinates = [48.277892939673805, 41.06510049407659, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 97
+coordinates = [53.77538474642168, 41.061613004939154, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 98
+coordinates = [53.77538474642168, 35.568956902797844, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 99
+coordinates = [48.277892939673805, 35.56493065309283, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 100
+coordinates = [48.27789293967382, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 101
+coordinates = [53.77538474642168, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 102
+coordinates = [53.77538474642168, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 103
+coordinates = [48.27789293967382, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 104
+coordinates = [59.2677044517208, 8.093120642766385, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 105
+coordinates = [64.77178227789474, 8.080270546204602, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 106
+coordinates = [64.76883880552553, 2.5983320014638323, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 107
+coordinates = [59.270663692691976, 2.5854306569456247, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 108
+coordinates = [59.26772022032278, 19.088478760559077, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 109
+coordinates = [64.77176650929277, 19.075958490588665, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 110
+coordinates = [64.76882303692356, 13.589671589596232, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 111
+coordinates = [59.27067946129395, 13.576885881492526, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 112
+coordinates = [59.267741245125414, 30.07375154333677, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 113
+coordinates = [64.7803078353641, 30.070195723590757, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 114
+coordinates = [64.77951940526519, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 115
+coordinates = [59.270695229895935, 24.57086161851183, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 116
+coordinates = [59.26770445172081, 41.0761569121634, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 117
+coordinates = [64.77178227789474, 41.06330812965177, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 118
+coordinates = [64.76883354932487, 35.576428592035, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 119
+coordinates = [59.27066894889263, 35.56354827231943, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 120
+coordinates = [59.26772022032278, 52.07151371590592, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 121
+coordinates = [64.77176650929275, 52.058993445935506, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 122
+coordinates = [64.76881778072291, 46.56890236971591, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 123
+coordinates = [59.270684717494625, 46.556119289712534, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 124
+coordinates = [70.26624125686222, 8.079633888899746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 125
+coordinates = [75.76344922877446, 8.079634545924831, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 126
+coordinates = [75.76023243397096, 2.5911418474744763, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 127
+coordinates = [70.26624125686219, 2.5879224245706647, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 128
+coordinates = [70.2662412568622, 19.081644385651845, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 129
+coordinates = [75.7634282039718, 19.072787687540952, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 130
+coordinates = [75.76021140916832, 13.579554717377277, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 131
+coordinates = [70.2662412568622, 13.57955471737728, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 132
+coordinates = [70.26853296034965, 30.08348339885743, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 133
+coordinates = [75.7686844046311, 30.072568898188422, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 134
+coordinates = [75.7713808355693, 24.570861618511817, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 135
+coordinates = [70.27206512719268, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 136
+coordinates = [70.26624125686219, 41.06508472547462, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 137
+coordinates = [75.76344922877445, 41.061594608236845, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 138
+coordinates = [75.76022717777033, 35.56897267139982, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 139
+coordinates = [70.2662412568622, 35.56494904979514, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 140
+coordinates = [70.2662412568622, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 141
+coordinates = [75.76343346017248, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 142
+coordinates = [75.7602114091683, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 143
+coordinates = [70.26624125686219, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 144
+coordinates = [81.260930523121, 8.07963454592483, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 145
+coordinates = [86.75842232986886, 8.07963388889975, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 146
+coordinates = [86.75842232986886, 2.5911273929226626, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 147
+coordinates = [81.260930523121, 2.5879058346873345, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 148
+coordinates = [81.260930523121, 19.08169037740761, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 149
+coordinates = [86.75842232986884, 19.072832365246555, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 150
+coordinates = [86.75842232986884, 13.579554717377276, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 151
+coordinates = [81.260930523121, 13.579554717377277, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 152
+coordinates = [81.26350606144405, 30.072516336181838, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 153
+coordinates = [86.76582306039712, 30.083578010469303, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 154
+coordinates = [86.76197552151451, 24.570861618511827, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 155
+coordinates = [81.26077809330187, 24.570861618511817, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 156
+coordinates = [81.26093052312099, 41.06510049407659, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 157
+coordinates = [86.75842232986885, 41.061613004939154, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 158
+coordinates = [86.75842232986885, 35.568956902797844, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 159
+coordinates = [81.26093052312099, 35.56493065309283, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 160
+coordinates = [81.26093052312099, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 161
+coordinates = [86.75842232986885, 52.05824706544189, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 162
+coordinates = [86.75842232986885, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
+
+[[camera.descriptor.targets]]
+id = 163
+coordinates = [81.26093052312099, 46.55878943964746, 0.0]
+variances = [0.01, 0.01, 0.01]
