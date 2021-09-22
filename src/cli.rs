@@ -10,7 +10,7 @@ use std::{
     str::FromStr,
 };
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use byte_unit::Byte;
 use chrono::NaiveDate;
 use clap::{crate_authors, crate_description, crate_version, App, AppSettings, Arg};
@@ -28,6 +28,7 @@ use crate::{
         },
         commands,
     },
+    object_space,
 };
 
 /// If trying to upload more files, exit and prompt to tar/zip files.
@@ -254,6 +255,10 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             if all_utf8_file_paths.len() > UPLOAD_MAX_FILES_ALLOWED {
                 bail!("You're trying to upload {} files (max = {}). Please tar/zip the files before uploading!", all_utf8_file_paths.len(), UPLOAD_MAX_FILES_ALLOWED);
             }
+
+            // Validate that toml are readable and parseable
+            object_space::read_object_space_config(utf8_toml_path.clone())
+                .context("Unable to read TOML object-space file!")?;
 
             let skip_prompt = upload_matches.is_present("yes");
             if skip_prompt {

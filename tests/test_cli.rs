@@ -194,8 +194,8 @@ mod tests {
     #[test]
     fn test_cli_upload_lists_files_and_prompts() {
         let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
-        let plex_filepath = Path::new("fixtures/empty.plex");
-        let toml_filepath = Path::new("fixtures/empty.toml");
+        let plex_filepath = Path::new("fixtures/example.plex");
+        let toml_filepath = Path::new("fixtures/checkerboard_detector.toml");
         let filepath = Path::new("fixtures/empty.bag");
         assert!(filepath.is_relative());
 
@@ -408,6 +408,27 @@ mod tests {
             .failure()
             .stderr(predicate::str::contains(
                 "Please tar/zip the files before uploading!",
+            ));
+    }
+
+    #[test]
+    fn test_cli_errors_on_bad_object_space_toml() {
+        let mut cmd = Command::cargo_bin("bolster").expect("Calling binary failed");
+        let plex_filepath = Path::new("fixtures/example.plex");
+        let toml_filepath = Path::new("fixtures/empty.toml");
+        let filepath = Path::new("fixtures/empty.bag");
+
+        cmd.arg("--config")
+            .arg("fixtures/test_full_config.toml")
+            .arg("upload")
+            .arg("robot-01")
+            .arg(plex_filepath)
+            .arg(toml_filepath)
+            .arg(filepath)
+            .assert()
+            .failure()
+            .stderr(predicate::str::contains(
+                "Unable to read TOML object-space file!",
             ));
     }
 }
