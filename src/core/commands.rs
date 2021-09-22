@@ -398,7 +398,7 @@ mod tests {
         let mut config = config::Config::default();
         config
             .merge(config::File::from_str(
-                include_str!("../resources/test_full_config.toml"),
+                include_str!("../../fixtures/test_full_config.toml"),
                 config::FileFormat::Toml,
             ))
             .unwrap();
@@ -453,7 +453,7 @@ mod tests {
             .unwrap();
 
         let url_str =
-            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/src/resources/test.dat";
+            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/fixtures/test.dat";
         let uploaded_files = vec![UploadedFile {
             file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),

@@ -632,13 +632,13 @@ mod tests {
 
     #[test]
     fn test_plex_pathkind_validation_good() {
-        let path = Path::new("src/resources/test.plex");
+        let path = Path::new("fixtures/empty.plex");
         PathKind::Plex.validate(path).unwrap();
     }
 
     #[test]
     fn test_plex_pathkind_validation_bad_extension() {
-        let path = Path::new("src/resources/test_full_config.toml");
+        let path = Path::new("fixtures/test_full_config.toml");
         PathKind::Plex.validate(path).unwrap_err();
     }
 
@@ -650,13 +650,13 @@ mod tests {
 
     #[test]
     fn test_toml_pathkind_validation_good() {
-        let path = Path::new("src/resources/test.toml");
+        let path = Path::new("fixtures/empty.toml");
         PathKind::ObjectSpaceToml.validate(path).unwrap();
     }
 
     #[test]
     fn test_toml_pathkind_validation_bad_extension() {
-        let path = Path::new("src/resources/test.plex");
+        let path = Path::new("fixtures/empty.plex");
         PathKind::ObjectSpaceToml.validate(path).unwrap_err();
     }
 
@@ -668,19 +668,19 @@ mod tests {
 
     #[test]
     fn test_data_pathkind_validation_good_bag() {
-        let path = Path::new("src/resources/test.bag");
+        let path = Path::new("fixtures/empty.bag");
         PathKind::Data.validate(path).unwrap();
     }
 
     #[test]
     fn test_data_pathkind_validation_good_folder() {
-        let path = Path::new("src/resources");
+        let path = Path::new("fixtures");
         PathKind::Data.validate(path).unwrap();
     }
 
     #[test]
     fn test_data_pathkind_validation_bad_extension() {
-        let path = Path::new("src/resources/test_full_config.toml");
+        let path = Path::new("fixtures/test_full_config.toml");
         PathKind::Data.validate(path).unwrap_err();
     }
 
@@ -692,19 +692,19 @@ mod tests {
 
     #[test]
     fn test_clean_and_validate_success() {
-        let path = OsStr::new("src/resources/test.plex");
+        let path = OsStr::new("fixtures/empty.plex");
         clean_and_validate_path(path, PathKind::Plex).unwrap();
     }
 
     #[test]
     fn test_clean_and_validate_disallow_dots() {
-        let path = OsStr::new("src/../src/resources/test.plex");
+        let path = OsStr::new("src/../fixtures/empty.plex");
         clean_and_validate_path(path, PathKind::Plex).unwrap_err();
     }
 
     #[test]
     fn test_clean_and_validate_disallow_absolute_path() {
-        let path = Path::new("src/resources/test.plex")
+        let path = Path::new("fixtures/empty.plex")
             .canonicalize()
             .unwrap()
             .into_os_string();
