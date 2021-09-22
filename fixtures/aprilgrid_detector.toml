@@ -1,7 +1,7 @@
 [camera.detector]
 type = "april_grid"
 length = 0.05
-family = "Tag16h5"
+family = "tag16h5"
 
 [camera.descriptor]
 type = "target_list"

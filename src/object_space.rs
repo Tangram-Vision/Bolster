@@ -91,19 +91,30 @@ pub enum Detector {
         ///
         /// Should be one of the following strings:
         ///
-        /// - Tag16h5
-        /// - Tag25h9
-        /// - Tag36h11
-        /// - Tag36h11Kalibr
-        /// - TagCircle21h7
-        /// - TagCircle49h12
-        /// - TagStandard41h12
-        /// - TagStandard52h13
-        /// - TagCustom48h12
+        /// - tag16h5
+        /// - tag25h9
+        /// - tag36h11
+        /// - tagCircle21h7
+        /// - tagCircle49h12
+        /// - tagStandard41h12
+        /// - tagStandard52h13
+        /// - tagCustom48h12
         ///
         family: String,
     },
 }
+
+/// List of supported AprilTag family variants
+const SUPPORTED_APRILTAG_FAMILIES: [&str; 8] = [
+    "tag16h5",
+    "tag25h9",
+    "tag36h11",
+    "tagCircle21h7",
+    "tagCircle49h12",
+    "tagStandard41h12",
+    "tagStandard52h13",
+    "tagCustom48h12",
+];
 
 /// A target describing a point in 3D space.
 ///
@@ -155,12 +166,21 @@ where
                 "The charuco detector only supports a 'detector_defined' descriptor."
             )),
         },
-        Detector::AprilGrid { .. } => match &config.camera.descriptor {
-            Descriptor::TargetList { .. } => Ok(()),
-            _ => Err(anyhow::anyhow!(
-                "The april_grid detector only supports a 'target_list' descriptor."
-            )),
-        },
+        Detector::AprilGrid { family, .. } => {
+            SUPPORTED_APRILTAG_FAMILIES.iter().find(|f| f == &family).ok_or_else(||
+                anyhow::anyhow!(
+                    "The april_grid 'family' is not one of the supported family types. Provided family: {}",
+                    &family
+                )
+            )?;
+
+            match &config.camera.descriptor {
+                Descriptor::TargetList { .. } => Ok(()),
+                _ => Err(anyhow::anyhow!(
+                    "The april_grid detector only supports a 'target_list' descriptor."
+                )),
+            }
+        }
     }?;
 
     Ok(config)
