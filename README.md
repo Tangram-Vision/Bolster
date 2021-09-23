@@ -12,7 +12,7 @@ If you have [Rust installed](https://rustup.rs/), you can install bolster
 with:
 
 ```shell
-cargo install --branch=release/0.2 --git=https://gitlab.com/tangram-vision-oss/bolster.git
+cargo install --branch=release/0.3 --git=https://gitlab.com/tangram-vision-oss/bolster.git
 ```
 
 Alternatively, release binaries are published for supported platforms at
@@ -32,7 +32,7 @@ services. A configuration file is provided to you when you join the Alpha
 program. To use the configuration file with bolster, either:
 
 - Place the configuration file at `~/.config/tangram_vision/bolster.toml`
-- Use the `--config path/to/bolster.toml` flag
+- Or use the `--config path/to/bolster.toml` flag
 
 ## Commands
 
@@ -44,7 +44,7 @@ Echoes current config (with any overrides applied) and exits.
 
 ---
 
-```bolster upload <SYSTEM_ID> <PLEX_PATH> <OBJECT_SPACE_CSV_PATH> <PATH>...```
+```bolster upload <SYSTEM_ID> <PLEX_PATH> <OBJECT_SPACE_TOML_PATH> <PATH>...```
 
 Creates a new dataset associated with the system ID and uploads all
 files in the provided path(s). If any data path (the last argument, which
@@ -63,7 +63,7 @@ integer (e.g. "unit 1") or a serial (e.g. "A12") or a build date (e.g.
 anything else. The dataset will be associated with the given system_id, to
 allow filtering datasets (and processing results) by system.
 
-For more info about plexes and object-space CSV files, please see the
+For more info about plexes and object-space TOML files, please see the
 Tangram Vision SDK documentation.
 
 Note: Only files up to 4.88 TB may be uploaded.
@@ -73,7 +73,7 @@ requirement of cloud storage providers such as [AWS
 S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html)).
 
 ![Bolster upload example
-gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload-0.2.0.gif)
+gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload-0.3.0.gif)
 
 <br>
 
@@ -89,7 +89,7 @@ If downloading a file would overwrite an existing file, the user is
 prompted to continue.
 
 ![Bolster download example
-gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download-0.2.0.gif)
+gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download-0.3.0.gif)
 
 <br>
 
@@ -103,7 +103,7 @@ dataset is selected with the `--uuid` option, files in that dataset will be
 listed.
 
 ![Bolster ls example
-image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls-0.2.0.png)
+image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls-0.3.0.png)
 
 ## Examples
 
@@ -112,17 +112,17 @@ image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls-0.2.0.png)
 # bolster upload
 ##################
 
-# Uploads the "robot-walle" system's plex and object-space CSV, along with
+# Uploads the "robot-walle" system's plex and object-space TOML, along with
 # ros-data.bag as a new dataset.
-bolster upload robot-walle v1.plex checkerboard.csv ros-data.bag
+bolster upload robot-walle v1.plex checkerboard.toml ros-data.bag
 
 # Uploads contents of the data folder as a new dataset for the
 # "drone-maverick" system.
-bolster upload drone-maverick maverick.plex object-space.csv data/*
+bolster upload drone-maverick maverick.plex object-space.toml data/*
 
 # Uploads all files in camera-1 and camera-2 folders as a new dataset for
 # "johnny-5" system.
-bolster upload johnny-5 2021aug.plex 2021aug.csv camera-1 camera-2
+bolster upload johnny-5 2021aug.plex 2021aug.toml camera-1 camera-2
 
 ####################
 # bolster download
