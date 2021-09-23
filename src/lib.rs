@@ -23,7 +23,7 @@
 //! View CLI help with `bolster help` or `bolster help <subcommand>`.
 //!
 //! Bolster is intended to be used as a binary -- if you want to use it as a
-//! library, [talk to us about your use case](https://tangram-vision.canny.io)!
+//! library, [email us about your use case](mailto:feedback@tangramvision.com)!
 //!
 //! ## Configuration
 //!
@@ -157,8 +157,8 @@
 //! # Troubleshooting
 //!
 //! If you're encountering issues using bolster, please refer to the table below
-//! for potential solutions. If the issue persists, please [let us
-//! know](https://tangram-vision.canny.io).
+//! for potential solutions. If the issue persists, please [email
+//! us](mailto:feedback@tangramvision.com).
 //!
 //! | Error | Resolution |
 //! |-|-|
@@ -188,15 +188,15 @@
 //! Bolster currently uploads up to 4 files in parallel with each file uploading
 //! up to 10 separate 16-MB chunks at a time. So, bolster may use up to 640 MB
 //! of RAM (plus some overhead). If you're working with a more constrained
-//! environment, please [let us know](https://tangram-vision.canny.io).
+//! environment, please [email us](mailto:feedback@tangramvision.com).
 //!
 //! All uploaded files are md5-checksummed for data integrity. As a result, you
 //! may notice some CPU load while uploading.
 //!
 //! # Feedback
 //!
-//! As always, if you have any feedback, please [let us
-//! know](https://tangram-vision.canny.io/)!
+//! As always, if you have any feedback, please email us at
+//! feedback@tangramvision.com!
 
 #[cfg(not(debug_assertions))]
 use human_panic::setup_panic;
