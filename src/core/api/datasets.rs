@@ -2,59 +2,15 @@
 //!
 //! The datasets database stores datasets, their files, and associated metadata.
 
-use std::time::Duration;
-
-use anyhow::{anyhow, bail, Context, Error, Result};
+use anyhow::{anyhow, Context, Result};
 use chrono::NaiveDate;
 use log::debug;
-use reqwest::{header, Response, StatusCode, Url};
 use serde_json::json;
 use strum_macros::{Display, EnumString, EnumVariantNames};
 use uuid::Uuid;
 
+use super::{check_response, DatabaseApiConfig};
 use crate::core::models::{Dataset, DatasetNoFiles, UploadedFile};
-
-/// Configuration for interacting with the datasets database.
-pub struct DatabaseApiConfig {
-    /// URL endpoint
-    pub base_url: Url,
-    /// HTTP client
-    pub client: reqwest::Client,
-}
-
-impl DatabaseApiConfig {
-    /// Configure HTTP client with endpoint, auth, and timeout.
-    pub fn new_with_params(
-        base_url: Url,
-        bearer_access_token: String,
-        timeout: u64,
-    ) -> Result<Self> {
-        let user_agent = format!("{}/{}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"),);
-        let mut headers = header::HeaderMap::new();
-        headers.insert(
-            header::AUTHORIZATION,
-            header::HeaderValue::from_str(&format!("Bearer {}", bearer_access_token))?,
-        );
-        headers.insert(
-            "Prefer",
-            header::HeaderValue::from_str("return=representation")?,
-        );
-        Ok(Self {
-            client: reqwest::Client::builder()
-                .user_agent(user_agent)
-                .default_headers(headers)
-                .timeout(Duration::from_secs(timeout))
-                .build()?,
-            base_url,
-        })
-    }
-
-    /// Configure HTTP client with endpoint, auth, and default 30-second timeout;
-    pub fn new(base_url: Url, bearer_access_token: String) -> Result<Self> {
-        let timeout = 30;
-        Self::new_with_params(base_url, bearer_access_token, timeout)
-    }
-}
 
 /// Available dataset sorting options
 #[derive(EnumString, EnumVariantNames, Display, Debug)]
@@ -116,59 +72,6 @@ impl Default for DatasetGetRequest {
     }
 }
 
-/// Responses with any of these [StatusCode]s show extra detail.
-const ERROR_STATUSES_TO_SHOW_DETAIL: [StatusCode; 3] = [
-    StatusCode::BAD_REQUEST,
-    StatusCode::UNAUTHORIZED,
-    StatusCode::FORBIDDEN,
-];
-
-/// Returns response json or an error with extra context/detail.
-///
-/// For responses with a status code in [ERROR_STATUSES_TO_SHOW_DETAIL], return
-/// an error message that includes contents of "message", "detail", and "hint"
-/// fields in the API response, if they're provided. This will be used to inform
-/// users if they're providing bad input to the API or if a particular API
-/// endpoint is disabled/retired (and the user should upgrade to a newer version
-/// of bolster).
-pub async fn check_response(response: Response) -> Result<serde_json::Value> {
-    let status = response.status();
-    debug!("check_response status: {}", status);
-    let status_maybe_err = response.error_for_status_ref();
-    if status_maybe_err.is_ok() {
-        let content = response
-            .json()
-            .await
-            .with_context(|| "JSON from API was malformed.");
-        debug!("check_response content: {:?}", content);
-        let content = content?;
-        return Ok(content);
-    }
-
-    let status_err = status_maybe_err.unwrap_err();
-    if status_err.status().is_some()
-        && ERROR_STATUSES_TO_SHOW_DETAIL.contains(&status_err.status().unwrap())
-    {
-        response.json::<serde_json::Value>().await.map(|js| {
-            // Build up error to show user from error message and any message,
-            // detail, and hint fields that are populated.
-            let mut err_msg = format!("{}", status_err);
-            if let Some(Some(msg)) = js.get("message").map(|v| v.as_str()) {
-                err_msg.push_str(&format!("\n\tMessage: {}", msg))
-            }
-            if let Some(Some(details)) = js.get("details").map(|v| v.as_str()) {
-                err_msg.push_str(&format!("\n\tDetails: {}", details))
-            }
-            if let Some(Some(hint)) = js.get("hint").map(|v| v.as_str()) {
-                err_msg.push_str(&format!("\n\tHint: {}", hint))
-            }
-            bail!(err_msg);
-        })?
-    } else {
-        Err(Error::new(status_err))
-    }
-}
-
 /// Get a list of datasets and their files.
 ///
 /// # Errors
@@ -184,7 +87,7 @@ pub async fn datasets_get(
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("datasets");
+    api_url.set_path("rest/v1/datasets");
     api_url.set_query(Some("select=*,files(*)"));
     let mut req_builder = client.get(api_url.as_str());
 
@@ -245,7 +148,7 @@ pub async fn datasets_post(
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("datasets");
+    api_url.set_path("rest/v1/datasets");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
@@ -289,7 +192,7 @@ pub async fn files_get(
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("files");
+    api_url.set_path("rest/v1/files");
     let req_builder = client.get(api_url.as_str());
 
     let req_builder = req_builder.query(&[("dataset_id", format!("eq.{}", dataset_id))]);
@@ -335,23 +238,23 @@ pub async fn files_get(
 pub async fn files_post(
     configuration: &DatabaseApiConfig,
     dataset_id: Uuid,
-    url: &Url,
+    key: String,
     filesize: usize,
-    version: String,
     metadata: serde_json::Value,
 ) -> Result<UploadedFile> {
-    debug!("building files post request for: {} {}", dataset_id, url);
+    debug!("building files post request for: {} {}", dataset_id, key);
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("files");
+    api_url.set_path("rest/v1/files");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
         "dataset_id": dataset_id,
-        "url": url,
+        // TODO: update database structure to have key instead of url (or just point to storage.objects)
+        "key": key,
         "filesize": filesize,
-        "version": version,
+        "version": "TODO: remove!",
         "metadata": metadata,
     });
     req_builder = req_builder.json(&req_body);
@@ -386,19 +289,20 @@ pub async fn datasets_notify_upload_complete(
     object_space_file_id: Uuid,
 ) -> Result<()> {
     debug!(
-        "Building datasets_notify_upload_complete post request for: {}",
-        dataset_id
+        "Building datasets_notify_upload_complete post request for: {} {} {}",
+        dataset_id, plex_file_id, object_space_file_id
     );
     let client = &configuration.client;
 
     let mut api_url = configuration.base_url.clone();
-    api_url.set_path("rpc/dataset_upload_complete");
+    api_url.set_path("rest/v1/rpc/dataset_upload_complete");
     let mut req_builder = client.post(api_url.as_str());
 
     let req_body = json!({
         "dataset_id": dataset_id,
-        "plex_file_id": plex_file_id,
-        "object_space_file_id": object_space_file_id,
+        // TODO: enable these params when db is also updated
+        // "plex_file_id": plex_file_id,
+        // "object_space_file_id": object_space_file_id,
     });
     req_builder = req_builder.json(&req_body);
 
@@ -413,12 +317,13 @@ pub async fn datasets_notify_upload_complete(
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
+    use std::{str::FromStr, time::Duration};
 
     use httpmock::{
         Method::{GET, POST},
         MockServer,
     };
+    use reqwest::Url;
 
     use super::*;
 
@@ -438,6 +343,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -468,6 +374,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -500,6 +407,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -534,6 +442,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -567,6 +476,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -600,6 +510,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -640,6 +551,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -682,6 +594,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -724,6 +637,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -757,6 +671,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -788,6 +703,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )
@@ -821,6 +737,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             1,
         )
@@ -854,6 +771,7 @@ mod tests {
 
         let config = DatabaseApiConfig::new_with_params(
             Url::parse(&server.base_url()).unwrap(),
+            "test-bucket".to_owned(),
             "TEST-TOKEN".to_owned(),
             10,
         )

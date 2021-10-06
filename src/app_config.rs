@@ -1,73 +1,15 @@
 //! Structs and helper methods for using data in the bolster config file.
 
-use std::cmp::PartialEq;
-
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use serde::{Deserialize, Serialize};
-use strum_macros::{AsRefStr, EnumIter, EnumString, EnumVariantNames};
 use uuid::Uuid;
-
-/// Available choices of cloud storage providers.
-///
-/// To use a cloud storage provider, valid credentials must be present in the
-/// bolster config file.
-#[derive(AsRefStr, EnumVariantNames, EnumString, EnumIter, Debug, PartialEq)]
-pub enum StorageProviderChoices {
-    /// DigitalOcean Spaces
-    #[strum(serialize = "digitalocean")]
-    DigitalOcean,
-    /// AWS S3
-    #[strum(serialize = "aws")]
-    Aws,
-}
-
-impl StorageProviderChoices {
-    /// The domain name corresponding to the storage provider.
-    pub fn url_pattern(&self) -> &'static str {
-        match *self {
-            StorageProviderChoices::DigitalOcean => "digitaloceanspaces.com",
-            StorageProviderChoices::Aws => "amazonaws.com",
-        }
-    }
-    /// Derives the storage provider enum value from a url.
-    pub fn from_url(url: &Url) -> Result<StorageProviderChoices> {
-        match url
-            .domain()
-            .ok_or_else(|| anyhow!("Storage provider url doesn't contain a domain: {}", url))?
-        {
-            x if x.contains(StorageProviderChoices::Aws.url_pattern()) => {
-                Ok(StorageProviderChoices::Aws)
-            }
-
-            x if x.contains(StorageProviderChoices::DigitalOcean.url_pattern()) => {
-                Ok(StorageProviderChoices::DigitalOcean)
-            }
-
-            _ => Err(anyhow!(
-                "Trying to download from unknown storage provider: {}",
-                url
-            )),
-        }
-    }
-}
-
-impl Default for StorageProviderChoices {
-    fn default() -> Self {
-        StorageProviderChoices::Aws
-    }
-}
 
 /// Used only for `config` subcommand to show all config.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct CompleteAppConfig {
     /// Database connection and authentication details.
     pub database: Database,
-    /// Configuration values for connecting to DigitalOcean Spaces cloud
-    /// storage.
-    pub digitalocean_spaces: Option<StorageApiKeys>,
-    /// Configuration values for connecting to AWS S3 cloud storage.
-    pub aws_s3: Option<StorageApiKeys>,
 }
 
 /// Container for configuration values for connecting + authenticating with the
@@ -85,30 +27,8 @@ pub struct Database {
     pub jwt: String,
     /// Database endpoint
     pub url: Url,
-}
-
-/// Container for configuration values for connecting to DigitalOcean Spaces
-/// cloud storage.
-#[derive(Debug, Deserialize)]
-pub struct DigitalOceanSpacesConfig {
-    /// Authentication credentials
-    pub digitalocean_spaces: StorageApiKeys,
-}
-
-/// Container for configuration values for connecting to AWS S3 cloud storage.
-#[derive(Debug, Deserialize)]
-pub struct AwsS3Config {
-    /// Authentication credentials
-    pub aws_s3: StorageApiKeys,
-}
-
-/// Auth keys for S3-compatible cloud storage providers.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct StorageApiKeys {
-    /// Access key
-    pub access_key: String,
-    /// Secret key
-    pub secret_key: String,
+    /// Storage bucket (group id)
+    pub bucket: String,
 }
 
 impl Database {
@@ -128,6 +48,7 @@ impl Database {
     ///                        IjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5Z\
     ///                        jQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3Nj\
     ///                        Q4fQ.NE3gOa2dg7xh1hRpr0haDWLLOxqmK8BBvmD-rQfYpuQ"),
+    ///     bucket: "test",
     /// };
     /// assert_eq!(
     ///     uuid::Uuid::parse_str("f60a843a-25ac-4c54-a169-5e9097b69f43").unwrap(),
@@ -152,9 +73,9 @@ impl Database {
             String::from_utf8(bytes).context("Config error: Database jwt isn't valid UTF-8")?;
         let parsed: serde_json::Value = serde_json::from_str(&jwt_str)
             .context("Config error: Database jwt doesn't contain valid JSON")?;
-        let user_id = parsed["user_id"]
+        let user_id = parsed["sub"]
             .as_str()
-            .context("Config error: Database jwt doesn't contain expected field: user_id")?;
+            .context("Config error: Database jwt doesn't contain expected field: sub")?;
         let user_uuid: Uuid = Uuid::parse_str(user_id)
             .context("Config error: Database jwt's user_id isn't a valid UUID")?;
         Ok(user_uuid)
@@ -168,32 +89,6 @@ mod tests {
     use predicates::prelude::*;
 
     use super::*;
-
-    #[test]
-    fn test_bad_url_to_provider_enum() {
-        let error = StorageProviderChoices::from_url(&Url::from_str("http://example.com").unwrap())
-            .expect_err("Url shouldn't be recognized as a storage provider url");
-        assert!(
-            error
-                .to_string()
-                .contains("Trying to download from unknown storage provider:"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[test]
-    fn test_ip_addr_url_to_provider_enum() {
-        let error = StorageProviderChoices::from_url(&Url::from_str("http://127.0.0.1").unwrap())
-            .expect_err("Url shouldn't be recognized as a storage provider url");
-        assert!(
-            error
-                .to_string()
-                .contains("Storage provider url doesn't contain a domain:"),
-            "{}",
-            error.to_string()
-        );
-    }
 
     #[test]
     fn test_jwt_decode() {
@@ -214,6 +109,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5ZjQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3NjQ4fQ.NE3gOa2dg7xh1hRpr0haDWLLOxqmK8BBvmD-rQfYpuQ"),
+            bucket: "test".to_owned(),
         };
         assert_eq!(
             Uuid::parse_str("f60a843a-25ac-4c54-a169-5e9097b69f43").unwrap(),
@@ -226,6 +122,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiZjYwYTg0M2EtMjVhYy00YzU0LWExNjktNWU5MDk3YjY5ZjQzIiwicm9sZSI6IndlYl91c2VyIiwiaWF0IjoxNjIwODQ3NjQ4fQ"),
+            bucket: "test".to_owned(),
         };
         assert!(
             predicate::str::contains("expected 3 period-delimited segments")
@@ -238,6 +135,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("not.base64.encoded"),
+            bucket: "test".to_owned(),
         };
         assert!(predicate::str::contains("expected base64 encoding")
             .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
@@ -248,6 +146,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("//5iAGwAYQBoAA==.//5iAGwAYQBoAA==.//5iAGwAYQBoAA=="),
+            bucket: "test".to_owned(),
         };
         assert!(predicate::str::contains("isn't valid UTF-8")
             .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
@@ -258,6 +157,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("YmxhaA==.YmxhaA==.YmxhaA=="),
+            bucket: "test".to_owned(),
         };
         assert!(predicate::str::contains("doesn't contain valid JSON")
             .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
@@ -268,6 +168,7 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJibGFoIjoiYmxhaCJ9.5Oi7vKR1ur19mUy8UH_QALnKXCdWuWP9MiPCXbPb49g"),
+            bucket: "test".to_owned(),
         };
         assert!(
             predicate::str::contains("doesn't contain expected field: user_id")
@@ -280,16 +181,9 @@ mod tests {
         let db = Database {
             url: Url::from_str("http://example.com").unwrap(),
             jwt: String::from("eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiYmxhaCJ9.SLDLrwQwp3a6GNga05HFipYnMpsWizwzBpfp78wTaHg"),
+            bucket: "test".to_owned(),
         };
         assert!(predicate::str::contains("user_id isn't a valid UUID")
             .eval(&db.user_id_from_jwt().unwrap_err().to_string()));
-    }
-    #[test]
-    fn test_digitalocean_provider_available() {
-        let val = StorageProviderChoices::from_url(
-            &Url::from_str("https://digitaloceanspaces.com/bucket/key").unwrap(),
-        )
-        .expect("Url should be recognized");
-        assert_eq!(val, StorageProviderChoices::DigitalOcean);
     }
 }

@@ -2,9 +2,8 @@
 
 use std::{path::PathBuf, vec::Vec};
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use chrono::{DateTime, Utc};
-use reqwest::Url;
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -60,16 +59,10 @@ pub struct UploadedFile {
     /// The date will be after upload completes to cloud storage.
     #[serde(with = "notz_rfc_3339")]
     pub created_date: DateTime<Utc>,
-    /// Full url to the file in cloud storage.
-    pub url: Url,
+    /// TODO: this is storage.objects.name (doesn't include bucket name which is the group_id)
+    pub key: String,
     /// Size of the file in bytes.
     pub filesize: u64,
-    /// Version identifier given by cloud storage provider.
-    ///
-    /// Uploading a file with the same filepath as another file will not
-    /// overwrite, this just creates a new version with a different version
-    /// identifier.
-    pub version: String,
     /// Unimplemented -- may be used for holding sensor/platform/contextual data
     /// in the future.
     pub metadata: serde_json::Value,
@@ -82,20 +75,17 @@ impl UploadedFile {
     ///
     /// Returns an error if the url is somehow malformed (missing a path or the
     /// required dataset id prefix).
+    /// TODO: rename from url to key?
     pub fn filepath_from_url(&self) -> Result<PathBuf> {
-        let mut segments = self
-            .url
-            .path_segments()
-            .ok_or_else(|| anyhow!("File URL is malformed!"))?;
-
+        let dataset_id = self.dataset_id.to_hyphenated().to_string();
+        let mut segments = self.key.split('/');
         loop {
             if let Some(segment) = segments.next() {
-                if segment == self.dataset_id.to_hyphenated().to_string() {
+                if segment == dataset_id {
                     break;
                 }
             } else {
-                // We got to the end and never found the dataset id?
-                bail!("File url ({}) doesn't contain dataset-id.", self.url);
+                bail!("File key doesn't contain dataset-id. key={}", self.key);
             }
         }
         Ok(segments.collect::<PathBuf>())
@@ -159,17 +149,13 @@ mod tests {
     #[test]
     fn test_uploadedfile_filepath_from_url_success() {
         let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
-        let url_str = format!(
-            "https://bucket.example.com/{}/fixtures/test.dat",
-            dataset_id
-        );
+        let key = format!("{}/fixtures/test.dat", dataset_id);
         let uf = UploadedFile {
             dataset_id,
             file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
-            url: Url::parse(&url_str).unwrap(),
+            key,
             filesize: 12,
-            version: "blah".to_owned(),
             metadata: json!({}),
         };
         assert_eq!(
@@ -181,17 +167,13 @@ mod tests {
     #[test]
     fn test_uploadedfile_filepath_from_url_bad_url_missing_dataset_id() {
         let dataset_id = Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap();
-        let url_str = format!(
-            "https://bucket.example.com/{}/fixtures/test.dat",
-            "not-the-right-dataset-id"
-        );
+        let key = format!("{}/fixtures/test.dat", "not-the-right-dataset-id");
         let uf = UploadedFile {
             dataset_id,
             file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
             created_date: Utc::now(),
-            url: Url::parse(&url_str).unwrap(),
+            key,
             filesize: 12,
-            version: "blah".to_owned(),
             metadata: json!({}),
         };
         let e = uf

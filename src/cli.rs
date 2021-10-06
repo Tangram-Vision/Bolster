@@ -19,12 +19,11 @@ use uuid::Uuid;
 use walkdir::WalkDir;
 
 use crate::{
-    app_config::{DatabaseConfig, StorageProviderChoices},
+    app_config::DatabaseConfig,
     core::{
         api::{
-            datasets::{DatabaseApiConfig, DatasetGetRequest, DatasetOrdering},
-            storage,
-            storage::StorageConfig,
+            datasets::{DatasetGetRequest, DatasetOrdering},
+            DatabaseApiConfig,
         },
         commands,
     },
@@ -201,14 +200,11 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
     // Derive config needed for all commands (they all interact with the database)
     let db = config.clone().try_into::<DatabaseConfig>()?.database;
-    let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt.clone())?;
+    let db_config = DatabaseApiConfig::new(db.url.clone(), db.bucket.clone(), db.jwt.clone())?;
 
     // Handle all subcommands that interact with database or storage
     match cli_matches.subcommand() {
         Some(("upload", upload_matches)) => {
-            let provider =
-                StorageProviderChoices::from_str(upload_matches.value_of("provider").unwrap())?;
-            let storage_config = storage::StorageConfig::new(config, provider)?;
             let prefix = db.user_id_from_jwt()?.to_string();
 
             let system_id: String = upload_matches.value_of_t_or_exit::<String>("system_id");
@@ -288,7 +284,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             }
 
             commands::create_and_upload_dataset(
-                storage_config,
                 &db_config,
                 system_id,
                 &prefix,
@@ -360,7 +355,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                                 Byte::from_bytes(f.filesize as u128)
                                     .get_appropriate_unit(false)
                                     .to_string(),
-                                f.url,
+                                f.key,
                             );
                         }
                     }
@@ -398,10 +393,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 });
             let uploaded_files = commands::list_files(&db_config, dataset_id, prefixes).await?;
 
-            // Based on url from database, find which StorageProvider's config to use
-            let provider = StorageProviderChoices::from_url(&uploaded_files[0].url)?;
-            let storage_config = StorageConfig::new(config, provider)?;
-
             let total_filesize = uploaded_files.iter().fold(0, |acc, f| acc + f.filesize);
             let number_of_files = uploaded_files.len();
 
@@ -428,7 +419,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                     }
                 }
             }
-            commands::download_files(storage_config, uploaded_files).await?;
+            commands::download_files(&db_config, uploaded_files).await?;
         }
         _ => {
             // Arguments are required by default (in Clap).
@@ -441,9 +432,6 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
 /// Configures CLI arguments and help messages.
 pub fn cli_config() -> Result<clap::ArgMatches> {
-    // Can't get default enum variant's &'static str, so own it here
-    let default_storage_provider = StorageProviderChoices::default();
-
     let cli_app = App::new("bolster")
         .setting(AppSettings::ArgRequiredElseHelp)
         .version(crate_version!())
@@ -501,16 +489,6 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .about("Automatic yes to prompt that lists files to upload")
                         .short('y')
                         .long("yes")
-                )
-                .arg(
-                    Arg::new("provider")
-                        .short('p')
-                        .long("provider")
-                        .value_name("PROVIDER")
-                        .about("Upload to specified cloud storage provider")
-                        .default_value(default_storage_provider.as_ref())
-                        .possible_values(StorageProviderChoices::VARIANTS)
-                        .takes_value(true),
                 ),
         )
         .subcommand(

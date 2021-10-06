@@ -7,26 +7,22 @@ use std::{
     cmp::Eq,
     convert::TryInto,
     fmt::{Debug, Display},
-    iter,
     path::Path,
     sync::Arc,
 };
 
 use anyhow::{anyhow, Result};
-use byte_unit::MEBIBYTE;
 use futures::{stream, stream::StreamExt};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use log::debug;
 use read_progress_stream::ReadProgressStream;
-use reqwest::Url;
 use serde_json::json;
 use uuid::Uuid;
 
 use super::{
     api::{
-        datasets::{self, DatabaseApiConfig, DatasetGetRequest},
-        storage,
-        storage::StorageConfig,
+        datasets::{self, DatasetGetRequest},
+        storage, DatabaseApiConfig,
     },
     models::{Dataset, UploadedFile},
 };
@@ -37,16 +33,6 @@ pub const MAX_FILES_UPLOADING_CONCURRENTLY: usize = 4;
 
 /// Number of files allowed to download at the same time.
 pub const MAX_FILES_DOWNLOADING_CONCURRENTLY: usize = 4;
-
-/// Files with sizes under this threshold use one-shot upload, all other files
-/// use multipart upload.
-///
-/// The threshold is set to 64MB (currently yielding 4x 16MB part uploads).
-/// The threshold is set a bit arbitrarily -- it is above 64MB that the
-/// multipart upload starts being faster than one-shot uploads in local testing.
-/// Below 64MB, the extra overhead of extra API calls makes multipart uploads
-/// slower.
-pub const MULTIPART_FILESIZE_THRESHOLD: usize = 64 * (MEBIBYTE as usize);
 
 /// Provides the default progress bar style
 ///
@@ -122,7 +108,6 @@ impl Drop for MultiProgressGuard {
 /// Wraps [create_dataset] and [upload_file] -- see those functions for behavior
 /// and possible errors.
 pub async fn create_and_upload_dataset<P>(
-    config: StorageConfig,
     db_config: &DatabaseApiConfig,
     system_id: String,
     prefix: &str,
@@ -160,15 +145,7 @@ where
                 // Do the same with the object_space path
                 path == object_space_file_path,
                 // Uploads to storage AND registers to database
-                upload_file(
-                    config.clone(),
-                    db_config,
-                    dataset_id,
-                    path,
-                    prefix,
-                    &multi_progress,
-                )
-                .await,
+                upload_file(db_config, dataset_id, path, prefix, &multi_progress).await,
             )
         })
         .buffer_unordered(MAX_FILES_UPLOADING_CONCURRENTLY);
@@ -221,12 +198,11 @@ pub async fn list_datasets(
 pub async fn add_file_to_dataset(
     config: &DatabaseApiConfig,
     dataset_id: Uuid,
-    url: &Url,
+    key: String,
     filesize: usize,
-    version: String,
     metadata: serde_json::Value,
 ) -> Result<UploadedFile> {
-    datasets::files_post(config, dataset_id, url, filesize, version, metadata).await
+    datasets::files_post(config, dataset_id, key, filesize, metadata).await
 }
 
 /// Uploads a single file at the given path to the cloud storage provider
@@ -247,7 +223,6 @@ pub async fn add_file_to_dataset(
 /// and [add_file_to_dataset] -- see those functions' documentation for
 /// additional behavior and possible errors.
 pub async fn upload_file<P>(
-    config: StorageConfig,
     db_config: &DatabaseApiConfig,
     dataset_id: Uuid,
     path: P,
@@ -275,31 +250,9 @@ where
 
     let metadata = json!({});
 
-    if filesize < MULTIPART_FILESIZE_THRESHOLD {
-        debug!(
-            "Filesize {} < threshold {} so doing oneshot",
-            filesize, MULTIPART_FILESIZE_THRESHOLD
-        );
-        let (url, version) =
-            storage::upload_file_oneshot(config, path_str, filesize, key, multi_progress).await?;
-        // Register uploaded file to database
-        add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
-    } else {
-        debug!(
-            "Filesize {} > threshold {} so doing multipart",
-            filesize, MULTIPART_FILESIZE_THRESHOLD
-        );
-        let (url, version) = storage::upload_file_multipart(
-            config,
-            path_str,
-            filesize as usize,
-            key,
-            multi_progress,
-        )
-        .await?;
-        // Register uploaded file to database
-        add_file_to_dataset(db_config, dataset_id, &url, filesize, version, metadata).await
-    }
+    let key = storage::upload_file(db_config, path_str, filesize, key, multi_progress).await?;
+    // Register uploaded file to database
+    add_file_to_dataset(db_config, dataset_id, key, filesize, metadata).await
 }
 
 /// List all files in the given dataset, optionally filtered by prefixes.
@@ -327,7 +280,7 @@ pub async fn list_files(
 ///
 /// Wraps [download_file] -- see its documentation for other possible errors.
 pub async fn download_files(
-    storage_config: StorageConfig,
+    db_config: &DatabaseApiConfig,
     uploaded_files: Vec<UploadedFile>,
 ) -> Result<()> {
     if uploaded_files.is_empty() {
@@ -339,10 +292,7 @@ pub async fn download_files(
         let mut futs = stream::iter(
             uploaded_files
                 .iter()
-                .zip(iter::repeat_with(|| storage_config.clone()))
-                .map(|(uploaded_file, local_storage_config)| {
-                    download_file(local_storage_config, uploaded_file, &multi_progress)
-                }),
+                .map(|uploaded_file| download_file(db_config, uploaded_file, &multi_progress)),
         )
         .buffer_unordered(MAX_FILES_DOWNLOADING_CONCURRENTLY);
         while let Some(res) = futs.next().await {
@@ -367,11 +317,11 @@ pub async fn download_files(
 /// Wraps [storage::download_file] -- see its documentation for other possible
 /// errors.
 pub async fn download_file(
-    storage_config: StorageConfig,
+    db_config: &DatabaseApiConfig,
     uploaded_file: &UploadedFile,
     multi_progress: &MultiProgress,
 ) -> Result<()> {
-    debug!("Downloading file: {}", uploaded_file.url);
+    debug!("Downloading file: {}", uploaded_file.key);
     let filepath = uploaded_file.filepath_from_url()?;
     if let Some(dir) = filepath.parent() {
         tokio::fs::create_dir_all(dir).await?;
@@ -387,7 +337,7 @@ pub async fn download_file(
         pgbar.set_position(total_bytes_read);
     });
 
-    let async_data = storage::download_file(storage_config, &uploaded_file.url).await?;
+    let async_data = storage::download_file(db_config, uploaded_file.key.clone()).await?;
     let mut file = tokio::fs::File::create(filepath.clone()).await?;
     let read_wrapper = ReadProgressStream::new(async_data, progress);
 
@@ -409,13 +359,8 @@ pub fn print_config(config: config::Config) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use chrono::Utc;
-
     use super::*;
-    use crate::{
-        app_config::{DatabaseConfig, StorageProviderChoices},
-        core::api::datasets::DatabaseApiConfig,
-    };
+    use crate::{app_config::DatabaseConfig, core::api::DatabaseApiConfig};
 
     #[tokio::test]
     async fn test_upload_missing_file() {
@@ -432,13 +377,13 @@ mod tests {
             .try_into::<DatabaseConfig>()
             .unwrap()
             .database;
-        let db_config = DatabaseApiConfig::new(db.url.clone(), db.jwt).unwrap();
-        let storage_config = StorageConfig::new(config, StorageProviderChoices::Aws).unwrap();
+        let db_config =
+            DatabaseApiConfig::new(db.url.clone(), db.jwt, "test-bucket".to_owned()).unwrap();
         let dataset_id = Uuid::parse_str("619e0899-ec94-4d87-812c-71736c09c4d6").unwrap();
         let path = "nonexistent-file".to_owned();
         let prefix = "";
         let mp = MultiProgress::new();
-        let error = upload_file(storage_config, &db_config, dataset_id, path, prefix, &mp)
+        let error = upload_file(&db_config, dataset_id, path, prefix, &mp)
             .await
             .expect_err("Loading nonexistent file should fail");
         assert!(
@@ -461,41 +406,6 @@ mod tests {
         let error = print_config(config).expect_err("Unexpected config format should error");
         assert!(
             error.to_string().contains("missing field"),
-            "{}",
-            error.to_string()
-        );
-    }
-
-    #[test]
-    fn test_bad_storage_config() {
-        let mut config = config::Config::default();
-        config
-            .merge(config::File::from_str(
-                "[blah]\naccess_key = \"whatever\"",
-                config::FileFormat::Toml,
-            ))
-            .unwrap();
-
-        let url_str =
-            "https://tangram-vision-datasets.s3.us-west-1.amazonaws.com/fixtures/test.dat";
-        let uploaded_files = vec![UploadedFile {
-            file_id: Uuid::parse_str("c11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
-            dataset_id: Uuid::parse_str("d11cc371-f33b-4dad-ac2e-3c4cca30a256").unwrap(),
-            created_date: Utc::now(),
-            url: Url::parse(url_str).unwrap(),
-            filesize: 12,
-            version: "blah".to_owned(),
-            metadata: json!({}),
-        }];
-
-        // Based on url from database, find which StorageProvider's config to use
-        let provider = StorageProviderChoices::from_url(&uploaded_files[0].url).unwrap();
-        let error =
-            StorageConfig::new(config, provider).expect_err("Missing storage config should error");
-        assert!(
-            error
-                .to_string()
-                .contains("Config file must contain a [aws_s3] section"),
             "{}",
             error.to_string()
         );
