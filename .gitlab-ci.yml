@@ -1,7 +1,7 @@
 # CONFIGURATION
 
 default:
-  image: "registry.gitlab.com/tangram-vision-oss/bolster/ci:latest"
+  image: "registry.gitlab.com/tangram-vision/oss/ci-oss/public-ci:latest"
   before_script:
     - rustup update stable
 
