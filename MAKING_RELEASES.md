@@ -27,7 +27,7 @@ To make a release:
     2. To build openssl source: `sudo apt install musl-tools`
 9. Strip binaries to reduce size: `strip path/to/binary`
 10. Tar and gzip binaries, e.g. `tar -czvf bolster.x86_64-unknown-linux-gnu.tar.gz bolster`
-11. Create a new release: https://gitlab.com/tangram-vision-oss/bolster/-/releases
+11. Create a new release: https://gitlab.com/tangram-vision/oss/bolster/-/releases
     1. Select the tag (e.g. `0.2.0`)
     2. Set the title
     3. Add release notes

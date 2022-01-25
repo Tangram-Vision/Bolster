@@ -12,11 +12,11 @@ If you have [Rust installed](https://rustup.rs/), you can install bolster
 with:
 
 ```shell
-cargo install --branch=release/0.2 --git=https://gitlab.com/tangram-vision-oss/bolster.git
+cargo install --branch=release/0.2 --git=https://gitlab.com/tangram-vision/oss/bolster.git
 ```
 
 Alternatively, release binaries are published for supported platforms at
-<https://gitlab.com/tangram-vision-oss/bolster/-/releases/>.
+<https://gitlab.com/tangram-vision/oss/bolster/-/releases/>.
 
 # Usage
 
@@ -73,7 +73,7 @@ requirement of cloud storage providers such as [AWS
 S3](https://docs.aws.amazon.com/AmazonS3/latest/userguide/object-keys.html)).
 
 ![Bolster upload example
-gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-upload-0.2.0.gif)
+gif](https://tangram-vision.gitlab.io/oss/bolster/assets/bolster-upload-0.2.0.gif)
 
 <br>
 
@@ -89,7 +89,7 @@ If downloading a file would overwrite an existing file, the user is
 prompted to continue.
 
 ![Bolster download example
-gif](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-download-0.2.0.gif)
+gif](https://tangram-vision.gitlab.io/oss/bolster/assets/bolster-download-0.2.0.gif)
 
 <br>
 
@@ -103,7 +103,7 @@ dataset is selected with the `--uuid` option, files in that dataset will be
 listed.
 
 ![Bolster ls example
-image](https://tangram-vision-oss.gitlab.io/bolster/assets/bolster-ls-0.2.0.png)
+image](https://tangram-vision.gitlab.io/oss/bolster/assets/bolster-ls-0.2.0.png)
 
 ## Examples
 
