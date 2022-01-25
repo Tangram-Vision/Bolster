@@ -76,7 +76,7 @@ impl DatasetOrdering {
 }
 
 /// Options for filtering dataset list query.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct DatasetGetRequest {
     /// Filter to a specific dataset
     pub dataset_id: Option<Uuid>,
@@ -100,20 +100,6 @@ pub struct DatasetGetRequest {
     // Related to
     // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/1
     // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/4
-}
-
-impl Default for DatasetGetRequest {
-    fn default() -> Self {
-        Self {
-            dataset_id: None,
-            system_id: None,
-            before_date: None,
-            after_date: None,
-            order: None,
-            limit: None,
-            offset: None,
-        }
-    }
 }
 
 /// Responses with any of these [StatusCode]s show extra detail.

@@ -349,9 +349,9 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 // If user is listing a single dataset, show its files...
                 if let Some(dataset_id) = dataset_id {
                     if datasets[0].files.is_empty() {
-                        println!("No files found in dataset {}", dataset_id.to_string());
+                        println!("No files found in dataset {}", dataset_id);
                     } else {
-                        println!("Files in dataset {}:\n", dataset_id.to_string());
+                        println!("Files in dataset {}:\n", dataset_id);
                         println!("{:<32} {:<12} URL", "Created Datetime", "Filesize",);
                         for f in &datasets[0].files {
                             println!(
@@ -408,9 +408,7 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
             println!(
                 "Downloading {} files, total {}",
                 number_of_files,
-                Byte::from_bytes(total_filesize as u128)
-                    .get_appropriate_unit(false)
-                    .to_string(),
+                Byte::from_bytes(total_filesize as u128).get_appropriate_unit(false)
             );
 
             for file in uploaded_files.iter() {
