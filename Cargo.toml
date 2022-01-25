@@ -7,7 +7,7 @@ authors = [
 ]
 edition = "2018"
 publish = false
-repository = "https://gitlab.com/tangram-vision-oss/bolster"
+repository = "https://gitlab.com/tangram-vision/oss/bolster"
 readme = "README.md"
 description = """
 CLI tool for managing sensor datasets, including upload/download and search/sort/filter.

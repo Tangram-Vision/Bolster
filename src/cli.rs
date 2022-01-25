@@ -1,6 +1,6 @@
 //! Command-line interface (subcommands, arguments, and handling)
 //!
-//! For overall architecture, see [ARCHITECTURE.md](https://gitlab.com/tangram-vision-oss/bolster/-/blob/main/ARCHITECTURE.md)
+//! For overall architecture, see [ARCHITECTURE.md](https://gitlab.com/tangram-vision/oss/bolster/-/blob/main/ARCHITECTURE.md)
 
 use std::{
     ffi::OsStr,
@@ -321,8 +321,8 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
 
             // TODO: Implement metadata CLI input
             // Related to
-            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
-            // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
+            // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/1
+            // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/4
 
             let dataset_id: Option<Uuid> = handle_optional_arg(ls_matches, "dataset_uuid");
             let system_id: Option<String> = handle_optional_arg(ls_matches, "system_id");
@@ -532,8 +532,8 @@ pub fn cli_config() -> Result<clap::ArgMatches> {
                         .takes_value(true),
                     // TODO: Implement metadata CLI input
                     // Related to
-                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/1
-                    // - https://gitlab.com/tangram-vision-oss/bolster/-/issues/4
+                    // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/1
+                    // - https://gitlab.com/tangram-vision/oss/bolster/-/issues/4
                     // Arg::new("metadata")
                     //     .about("NOT IMPLEMENTED: Show dataset matching metadata")
                     //     .short('m')
