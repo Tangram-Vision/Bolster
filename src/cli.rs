@@ -368,12 +368,12 @@ pub async fn cli_match(config: config::Config, cli_matches: clap::ArgMatches) ->
                 // ... otherwise show just datasets
                 else {
                     println!(
-                        "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
+                        "{:<40} {:<40.38} {:<26} {:<8} {:<12}",
                         "UUID", "System ID", "Created Datetime", "# Files", "Filesize",
                     );
                     for d in datasets {
                         println!(
-                            "{:<40} {:<20.18} {:<26} {:<8} {:<12}",
+                            "{:<40} {:<40.38} {:<26} {:<8} {:<12}",
                             d.dataset_id.to_string(),
                             d.system_id,
                             d.created_date.format("%Y-%m-%d %H:%M:%S UTC"),
